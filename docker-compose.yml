@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prontuario
+      POSTGRES_PASSWORD: prontuario_secret
+      POSTGRES_DB: prontuario
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prontuario -d prontuario"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://prontuario:prontuario_secret@postgres:5432/prontuario?sslmode=disable
+      PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET:-default-jwt-secret-min-32-chars-for-local}
+      # 43 chars base64 = 32 bytes (AES-256). Gere em prod: openssl rand -base64 32
+      DATA_ENCRYPTION_KEYS: ${DATA_ENCRYPTION_KEYS:-v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      CURRENT_DATA_KEY_VERSION: ${CURRENT_DATA_KEY_VERSION:-v1}
+      CORS_ORIGINS: http://localhost,http://localhost:80,http://localhost:5173,http://127.0.0.1:80,http://127.0.0.1:5173
+      APP_PUBLIC_URL: http://localhost:80
+      BACKEND_PUBLIC_URL: http://localhost:8080
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_FROM_NAME: Prontuário Saúde
+      SMTP_FROM_EMAIL: noreply@localhost
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+    ports:
+      - "80:80"    # http://localhost (ou http://localhost:80)
+      - "3000:80"  # alternativa: http://localhost:3000 (use se a porta 80 estiver ocupada)
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

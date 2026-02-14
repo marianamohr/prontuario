@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS access_logs;
+DROP TABLE IF EXISTS audit_events;
+DROP TABLE IF EXISTS patient_guardians;
+DROP TABLE IF EXISTS patients;
+DROP TABLE IF EXISTS legal_guardians;
+DROP TABLE IF EXISTS super_admins;
+DROP TABLE IF EXISTS professionals;
+DROP TABLE IF EXISTS clinics;
+DROP TYPE IF EXISTS user_role;
+DROP TYPE IF EXISTS auth_provider;
+DROP TYPE IF EXISTS user_status;

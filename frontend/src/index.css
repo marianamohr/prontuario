@@ -1,0 +1,229 @@
+:root {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  line-height: 1.6;
+  color: #1a1a2e;
+  background-color: #f8f9fc;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  width: 100%;
+  max-width: none !important; /* evita que estilos injetados do HTML do contrato (ex.: body { max-width: 640px }) limitem a página */
+}
+
+/* Prontuário (RecordEntries): alinhar listas apesar do reset global de margin/padding */
+.record-entry-content ul,
+.record-entry-content ol,
+.record-entry-editor ul,
+.record-entry-editor ol {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+.record-entry-content li,
+.record-entry-editor li {
+  margin: 0.15rem 0;
+}
+.record-entry-content li > p,
+.record-entry-editor li > p {
+  /* TipTap/ProseMirror gera <li><p>...</p></li>. Se <p> for block, o marcador fica na linha de cima e o texto cai pra baixo. */
+  display: inline;
+  margin: 0;
+}
+.record-entry-content li > p + p,
+.record-entry-editor li > p + p {
+  /* Se existirem parágrafos extras dentro do mesmo item, mantém em blocos abaixo. */
+  display: block;
+  margin-top: 0.25rem;
+}
+.record-entry-content ul,
+.record-entry-editor ul {
+  list-style: disc;
+  list-style-position: inside;
+}
+.record-entry-content ol,
+.record-entry-editor ol {
+  list-style: decimal;
+  list-style-position: inside;
+}
+.record-entry-editor {
+  outline: none;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Página de verificação de contrato: texto confortável para leitura */
+.verify-contract-body {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: #1a1a2e;
+}
+.verify-contract-body p,
+.verify-contract-body li {
+  margin-bottom: 0.75em;
+}
+.verify-contract-body h1,
+.verify-contract-body h2,
+.verify-contract-body h3 {
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+.verify-contract-body ul,
+.verify-contract-body ol {
+  padding-left: 1.5em;
+}
+/* Assinaturas em cursiva no contrato (profissional e responsável) */
+.verify-contract-body .sign-value,
+.verify-contract-body [style*="Brush Script"],
+.verify-contract-body [style*="Segoe Script"],
+.verify-contract-body [style*="Dancing Script"] {
+  font-family: 'Brush Script MT', 'Segoe Script', 'Dancing Script', cursive;
+  font-size: 1.35em;
+}
+
+/* Página de assinatura de contrato: mobile-first */
+.sign-contract-page {
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  background: #f8f9fc;
+  box-sizing: border-box;
+}
+@media (min-width: 768px) {
+  .sign-contract-page {
+    max-width: 100%;
+    padding: 2rem 2rem;
+  }
+}
+.sign-contract-page h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+@media (min-width: 768px) {
+  .sign-contract-page h1 {
+    font-size: 1.75rem;
+  }
+}
+.sign-contract-page .sign-contract-summary {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  background: #f3f4f6;
+}
+.sign-contract-page .sign-contract-summary p {
+  margin-bottom: 0.35rem;
+}
+.sign-contract-page .sign-contract-summary p:last-child {
+  margin-bottom: 0;
+}
+.sign-contract-page .sign-contract-preview {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  min-height: min(280px, 50vh);
+  max-height: min(400px, 60vh);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: #fff;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.sign-contract-page .sign-contract-preview p {
+  margin-bottom: 0.5em;
+}
+@media (min-width: 768px) {
+  .sign-contract-page .sign-contract-preview {
+    min-height: 420px;
+    max-height: 75vh;
+    padding: 1.5rem 2rem;
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+}
+.sign-contract-page .sign-contract-select-wrap {
+  margin-bottom: 1rem;
+}
+.sign-contract-page .sign-contract-select-wrap select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 1rem;
+}
+@media (min-width: 768px) {
+  .sign-contract-page .sign-contract-select-wrap select {
+    width: auto;
+    min-width: 200px;
+  }
+}
+.sign-contract-page .sign-contract-checkbox {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+.sign-contract-page .sign-contract-checkbox input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.sign-contract-page .sign-contract-submit {
+  width: 100%;
+  min-height: 48px;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+}
+@media (min-width: 768px) {
+  .sign-contract-page .sign-contract-submit {
+    width: auto;
+    min-width: 200px;
+  }
+}
+.sign-contract-page .sign-contract-success,
+.sign-contract-page .sign-contract-loading,
+.sign-contract-page .sign-contract-error-only {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  text-align: center;
+}
+.sign-contract-page .sign-contract-success {
+  max-width: 480px;
+  margin: 0 auto;
+}
+.sign-contract-page .sign-contract-success h2 {
+  font-size: 1.35rem;
+  margin-bottom: 0.75rem;
+}

@@ -1,0 +1,1 @@
+function f(n){return String(n||"").replace(/\D/g,"")}function m(n){const r=f(n);if(r.length!==11||/^(\d)\1{10}$/.test(r))return!1;const e=r.split("").map(t=>Number(t));if(e.some(t=>Number.isNaN(t)))return!1;const s=t=>{let o=0,c=t+1;for(let i=0;i<t;i++)o+=e[i]*c,c--;const l=11-o%11;return l>=10?0:l},u=s(9),a=s(10);return e[9]===u&&e[10]===a}export{m as i,f as n};
