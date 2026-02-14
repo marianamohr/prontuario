@@ -16,10 +16,10 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v3
         with:
           go-version: "1.22"
 
@@ -34,7 +34,7 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v4
         with:
           version: latest
           working-directory: backend
@@ -49,7 +49,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Set up Node
         uses: actions/setup-node@v4
