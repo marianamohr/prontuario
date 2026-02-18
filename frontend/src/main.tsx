@@ -10,6 +10,7 @@ type FrontendErrorPayload = {
   kind: string
   message: string
   stack?: string
+  path?: string
   metadata?: Record<string, unknown>
 }
 
@@ -27,12 +28,14 @@ function setupGlobalFrontendErrorHandlers() {
         // no-op
       }
     }
+    const pagePath = typeof window?.location?.pathname === 'string' ? window.location.pathname : ''
     window.addEventListener('error', (e: ErrorEvent) => {
       post({
         severity: 'ERROR',
         kind: 'WINDOW_ERROR',
         message: String(e?.message || 'window error'),
         stack: e?.error?.stack,
+        path: pagePath || undefined,
         metadata: { filename: e?.filename, lineno: e?.lineno, colno: e?.colno },
       })
     })
@@ -43,6 +46,7 @@ function setupGlobalFrontendErrorHandlers() {
         kind: 'UNHANDLED_REJECTION',
         message: String(reason?.message ?? reason ?? 'unhandled rejection'),
         stack: reason?.stack,
+        path: pagePath || undefined,
       })
     })
   } catch {

@@ -18,6 +18,7 @@ export class ErrorBoundary extends Component<Props, State> {
       const token = localStorage.getItem('token')
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
+      const path = typeof window?.location?.pathname === 'string' ? window.location.pathname : ''
       fetch(`${BASE}/api/errors/frontend`, {
         method: 'POST',
         headers,
@@ -26,6 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
           kind: 'REACT_ERROR_BOUNDARY',
           message: error?.message || 'react error',
           stack: error?.stack || undefined,
+          path: path || undefined,
           metadata: { componentStack: errorInfo?.componentStack ? String(errorInfo.componentStack).slice(0, 4000) : undefined },
         }),
       }).catch(() => {})

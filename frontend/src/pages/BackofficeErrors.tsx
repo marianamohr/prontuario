@@ -38,6 +38,15 @@ function parseMessageHuman(msg: string | null | undefined): string {
   return m
 }
 
+/** Extrai o primeiro path de arquivo do repositório no stack (ex.: src/pages/BackofficeAudit.tsx). */
+function extractFileFromStack(stack: string | null | undefined): string | null {
+  if (!stack || typeof stack !== 'string') return null
+  // Ex.: "at Component (webpack:///./src/pages/BackofficeAudit.tsx:45:12)" ou "http://.../src/pages/BackofficeAudit.tsx:45:12"
+  const match = stack.match(/src\/[^)\s]+\.(tsx?|jsx?|js)(?::\d+:\d+)?/)
+  if (!match) return null
+  return match[0].replace(/:\d+:\d+$/, '')
+}
+
 function describeError(it: api.BackofficeErrorItem): string {
   const kind = String(it.kind || '').toUpperCase()
   const method = it.http_method ? String(it.http_method) : ''
@@ -99,8 +108,9 @@ export function BackofficeErrors() {
       severity: severity || undefined,
     })
       .then((r) => {
-        setItems(reset ? r.items : [...items, ...r.items])
-        setOffset(nextOffset + r.items.length)
+        const list = r?.items ?? []
+        setItems(reset ? list : [...items, ...list])
+        setOffset(nextOffset + list.length)
       })
       .catch((e) => setError((e as Error)?.message || 'Falha ao carregar erros.'))
       .finally(() => setLoading(false))
@@ -151,23 +161,39 @@ export function BackofficeErrors() {
               <TableCell>Data/hora</TableCell>
               <TableCell>Sev</TableCell>
               <TableCell>Origem</TableCell>
+              <TableCell>Path (página / endpoint)</TableCell>
               <TableCell>Descrição</TableCell>
               <TableCell>Request</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((it) => (
+            {items.map((it) => {
+              const pageOrEndpoint = it.path?.trim() || null
+              const fileInRepo = extractFileFromStack(it.stack ?? undefined)
+              return (
               <TableRow key={it.id} hover>
                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(it.created_at).toLocaleString('pt-BR')}</TableCell>
                 <TableCell><Chip size="small" label={it.severity} /></TableCell>
                 <TableCell>{it.source}</TableCell>
+                <TableCell sx={{ fontFamily: pageOrEndpoint?.startsWith('/') ? 'inherit' : 'monospace', fontSize: 12, maxWidth: 320 }}>
+                  {pageOrEndpoint ? (
+                    <Box component="span" title={pageOrEndpoint}>
+                      {it.http_method ? `${it.http_method} ` : ''}{pageOrEndpoint}
+                    </Box>
+                  ) : fileInRepo ? (
+                    <Box component="span" title="Arquivo no repositório (do stack)">
+                      {fileInRepo}
+                    </Box>
+                  ) : (
+                    '—'
+                  )}
+                </TableCell>
                 <TableCell sx={{ maxWidth: 760 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {describeError(it)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {it.http_method && it.path ? `${it.http_method} ${it.path}` : ''}
-                    {it.action_name ? ` • ação: ${it.action_name}` : ''}
+                    {it.action_name ? `ação: ${it.action_name}` : ''}
                     {it.kind ? ` • kind: ${it.kind}` : ''}
                   </Typography>
                 </TableCell>
@@ -181,10 +207,10 @@ export function BackofficeErrors() {
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
             {items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography color="text.secondary">Nenhum erro encontrado.</Typography>
                 </TableCell>
               </TableRow>
