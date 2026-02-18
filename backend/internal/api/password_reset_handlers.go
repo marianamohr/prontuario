@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -30,21 +31,27 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "PROFESSIONAL", prof.ID, exp)
 		_ = errTok
 		if tok != "" && h.sendPasswordResetEmail != nil {
-			_ = h.sendPasswordResetEmail(req.Email, tok)
+			if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
+				log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+			}
 		}
 	}
 	if admin, err := repo.SuperAdminByEmail(r.Context(), h.Pool, req.Email); err == nil {
 		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "SUPER_ADMIN", admin.ID, exp)
 		_ = errTok
 		if tok != "" && h.sendPasswordResetEmail != nil {
-			_ = h.sendPasswordResetEmail(req.Email, tok)
+			if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
+				log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+			}
 		}
 	}
 	if g, err := repo.LegalGuardianByEmail(r.Context(), h.Pool, req.Email); err == nil {
 		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "LEGAL_GUARDIAN", g.ID, exp)
 		_ = errTok
 		if tok != "" && h.sendPasswordResetEmail != nil {
-			_ = h.sendPasswordResetEmail(req.Email, tok)
+			if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
+				log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

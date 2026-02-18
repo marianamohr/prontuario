@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -54,7 +55,12 @@ func (h *Handler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	registerURL := h.Cfg.AppPublicURL + "/register?token=" + inv.Token
 	if h.sendInviteEmail != nil {
-		_ = h.sendInviteEmail(req.Email, req.FullName, registerURL)
+		log.Printf("[invite] enviando e-mail de convite para %s", req.Email)
+		if err := h.sendInviteEmail(req.Email, req.FullName, registerURL); err != nil {
+			log.Printf("[invite] falha ao enviar e-mail para %s: %v", req.Email, err)
+		}
+	} else {
+		log.Printf("[invite] convite criado para %s mas envio de e-mail desativado (SMTP/APP_PUBLIC_URL)", req.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -145,7 +151,9 @@ func (h *Handler) ResendInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	registerURL := h.Cfg.AppPublicURL + "/register?token=" + inv.Token
 	if h.sendInviteEmail != nil {
-		_ = h.sendInviteEmail(inv.Email, inv.FullName, registerURL)
+		if err := h.sendInviteEmail(inv.Email, inv.FullName, registerURL); err != nil {
+			log.Printf("[invite] falha ao reenviar e-mail para %s: %v", inv.Email, err)
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Convite reenviado por e-mail."})
