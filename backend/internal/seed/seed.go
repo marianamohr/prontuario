@@ -82,7 +82,8 @@ func EnsurePatientsForExistingClinics(ctx context.Context, pool *pgxpool.Pool) e
 	return seedPatientsForExistingClinics(ctx, pool)
 }
 
-// seedPatientsForExistingClinics finds clinics with 0 patients and seeds 4 patients each.
+// seedPatientsForExistingClinics seeds 4 patients only for the demo clinics "Clínica A" and "Clínica B".
+// Clínicas criadas por convite (novos profissionais) ficam com 0 pacientes.
 func seedPatientsForExistingClinics(ctx context.Context, pool *pgxpool.Pool) error {
 	rows, err := pool.Query(ctx, `SELECT id, name FROM clinics ORDER BY name`)
 	if err != nil {
@@ -93,13 +94,19 @@ func seedPatientsForExistingClinics(ctx context.Context, pool *pgxpool.Pool) err
 	if err != nil {
 		return err
 	}
-	prefixes := map[string]string{"Clínica A": "clinica-a", "Clínica B": "clinica-b"}
+	// Só preencher pacientes nas clínicas de demonstração (profa@clinica-a.local e profb@clinica-b.local).
+	// Novos profissionais (criados por convite) não recebem seed de pacientes.
+	demoClinics := map[string]string{"Clínica A": "clinica-a", "Clínica B": "clinica-b"}
 	seeded := 0
 	for rows.Next() {
 		var id uuid.UUID
 		var name string
 		if err := rows.Scan(&id, &name); err != nil {
 			return err
+		}
+		prefix, isDemo := demoClinics[name]
+		if !isDemo {
+			continue
 		}
 		var n int
 		if err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM patients WHERE clinic_id = $1", id).Scan(&n); err != nil {
@@ -109,10 +116,6 @@ func seedPatientsForExistingClinics(ctx context.Context, pool *pgxpool.Pool) err
 			continue
 		}
 		log.Printf("seed: clínica %q (%s) sem pacientes, inserindo 4", name, id.String())
-		prefix := prefixes[name]
-		if prefix == "" {
-			prefix = "clinica"
-		}
 		if err := seedPatientsForClinic(ctx, pool, id, prefix, guardianHash); err != nil {
 			log.Printf("seed: erro ao inserir pacientes para %s: %v", name, err)
 			return err

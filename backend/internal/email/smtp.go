@@ -246,9 +246,16 @@ func (c *Config) SendWithAttachment(to, subject, body string, attachmentName str
 	buf.WriteString("Content-Type: application/pdf; name=\"" + attachmentName + "\"\r\n")
 	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
 	buf.WriteString("Content-Disposition: attachment; filename=\"" + attachmentName + "\"\r\n\r\n")
-	b64 := base64.NewEncoder(base64.StdEncoding, &buf)
-	_, _ = b64.Write(attachmentPDF)
-	_ = b64.Close()
+	// RFC 2045: base64 em MIME deve ter linhas de no máximo 76 caracteres
+	encoded := base64.StdEncoding.EncodeToString(attachmentPDF)
+	const lineLen = 76
+	for i := 0; i < len(encoded); i += lineLen {
+		end := i + lineLen
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		buf.WriteString(encoded[i:end] + "\r\n")
+	}
 	buf.WriteString("\r\n--" + boundary + "--\r\n")
 	log.Printf("[email] enviando com anexo para %s assunto=%q via %s", to, subject, addr)
 	err := smtp.SendMail(addr, c.authForSend(), c.FromAddr, []string{to}, buf.Bytes())

@@ -97,10 +97,10 @@ export function RegisterPatient() {
       return
     }
     if (!guardianBirthDate.trim()) {
-      setError('Data de nascimento do responsável é obrigatória.')
+      setError(samePerson ? 'Data de nascimento é obrigatória.' : 'Data de nascimento do responsável é obrigatória.')
       return
     }
-    if (!patientBirthDate.trim()) {
+    if (!samePerson && !patientBirthDate.trim()) {
       setError('Data de nascimento do paciente é obrigatória.')
       return
     }
@@ -115,7 +115,7 @@ export function RegisterPatient() {
         guardian_address: guardianAddress,
         guardian_birth_date: guardianBirthDate.trim(),
         patient_full_name: samePerson ? '' : patientFullName.trim(),
-        patient_birth_date: patientBirthDate.trim(),
+        patient_birth_date: samePerson ? guardianBirthDate.trim() : patientBirthDate.trim(),
       })
       setSuccess(true)
     } catch (err: unknown) {
@@ -198,7 +198,15 @@ export function RegisterPatient() {
             helperText={guardianCPF.trim() && !isValidCPF(guardianCPF) ? 'CPF inválido.' : ' '}
           />
 
-          <TextField label="Data de nascimento do responsável" type="date" value={guardianBirthDate} onChange={(e) => setGuardianBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} required fullWidth />
+          <TextField
+            label={samePerson ? 'Data de nascimento' : 'Data de nascimento do responsável'}
+            type="date"
+            value={guardianBirthDate}
+            onChange={(e) => setGuardianBirthDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            required
+            fullWidth
+          />
 
           <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 0.5 }}>Endereço</Typography>
           <TextField label="Rua" value={rua} onChange={(e) => setRua(e.target.value)} required fullWidth />
@@ -211,9 +219,11 @@ export function RegisterPatient() {
           <TextField label="CEP" value={cep} onChange={(e) => setCep(e.target.value)} required placeholder="00000000" inputProps={{ maxLength: 9 }} fullWidth />
 
           {!samePerson && (
-            <TextField label="Nome do paciente" value={patientFullName} onChange={(e) => setPatientFullName(e.target.value)} required fullWidth />
+            <>
+              <TextField label="Nome do paciente" value={patientFullName} onChange={(e) => setPatientFullName(e.target.value)} required fullWidth />
+              <TextField label="Data de nascimento do paciente" type="date" value={patientBirthDate} onChange={(e) => setPatientBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} required fullWidth />
+            </>
           )}
-          <TextField label="Data de nascimento do paciente" type="date" value={patientBirthDate} onChange={(e) => setPatientBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} required fullWidth />
 
           <Button type="submit" variant="contained" disabled={submitting} sx={{ mt: 0.5 }}>
             {submitting ? 'Salvando...' : 'Concluir cadastro'}
