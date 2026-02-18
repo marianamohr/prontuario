@@ -6,23 +6,23 @@ import (
 )
 
 type Config struct {
-	Port                string
-	DatabaseURL         string
-	JWTSecret           []byte
-	CORSOrigins         []string
-	DataEncryptionKeys  string
-	CurrentDataKeyVer   string
-	SMTPHost            string
-	SMTPPort            string
-	SMTPUser            string
-	SMTPPass            string
-	SMTPFromName        string
-	SMTPFromEmail       string
-	AppPublicURL        string
-	BackendPublicURL    string
+	Port               string
+	DatabaseURL        string
+	JWTSecret          []byte
+	CORSOrigins        []string
+	DataEncryptionKeys string
+	CurrentDataKeyVer  string
+	SMTPHost           string
+	SMTPPort           string
+	SMTPUser           string
+	SMTPPass           string
+	SMTPFromName       string
+	SMTPFromEmail      string
+	AppPublicURL       string
+	BackendPublicURL   string
 	// WhatsApp (Twilio) para lembretes de consulta
-	TwilioAccountSid string
-	TwilioAuthToken  string
+	TwilioAccountSid   string
+	TwilioAuthToken    string
 	TwilioWhatsAppFrom string
 }
 
@@ -60,9 +60,9 @@ func Load() *Config {
 		SMTPFromEmail:      getEnv("SMTP_FROM_EMAIL", "noreply@localhost"),
 		AppPublicURL:       getEnv("APP_PUBLIC_URL", "http://localhost:5173"),
 		BackendPublicURL:   getEnv("BACKEND_PUBLIC_URL", "http://localhost:8080"),
-		TwilioAccountSid:    os.Getenv("TWILIO_ACCOUNT_SID"),
-		TwilioAuthToken:     os.Getenv("TWILIO_AUTH_TOKEN"),
-		TwilioWhatsAppFrom:  os.Getenv("TWILIO_WHATSAPP_FROM"),
+		TwilioAccountSid:   os.Getenv("TWILIO_ACCOUNT_SID"),
+		TwilioAuthToken:    os.Getenv("TWILIO_AUTH_TOKEN"),
+		TwilioWhatsAppFrom: os.Getenv("TWILIO_WHATSAPP_FROM"),
 	}
 }
 

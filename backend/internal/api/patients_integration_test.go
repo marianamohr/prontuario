@@ -76,7 +76,10 @@ func TestIntegration_TenantIsolation_ListPatients(t *testing.T) {
 
 	// cria paciente na clínica A
 	body := map[string]interface{}{"full_name": "Paciente Isolamento Via HTTP"}
-	raw, _ := json.Marshal(body)
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/patients", bytes.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", authHeaderForProfessional(t, jwtSecret, profA, clinicA))
@@ -85,7 +88,9 @@ func TestIntegration_TenantIsolation_ListPatients(t *testing.T) {
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d body=%s", rr.Code, rr.Body.String())
 	}
-	var created struct{ ID string `json:"id"` }
+	var created struct {
+		ID string `json:"id"`
+	}
 	_ = json.Unmarshal(rr.Body.Bytes(), &created)
 	if created.ID == "" {
 		t.Fatalf("expected id in response, got %s", rr.Body.String())
@@ -129,7 +134,10 @@ func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 
 	// cria paciente com CPF
 	body := map[string]interface{}{"full_name": "Paciente CPF", "patient_cpf": "529.982.247-25"}
-	raw, _ := json.Marshal(body)
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/patients", bytes.NewReader(raw))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", authz)
@@ -138,7 +146,9 @@ func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d body=%s", rr.Code, rr.Body.String())
 	}
-	var created struct{ ID string `json:"id"` }
+	var created struct {
+		ID string `json:"id"`
+	}
 	_ = json.Unmarshal(rr.Body.Bytes(), &created)
 	if created.ID == "" {
 		t.Fatalf("expected id, got %s", rr.Body.String())
@@ -146,7 +156,10 @@ func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 
 	// tenta criar outro com mesmo CPF na mesma clínica
 	body2 := map[string]interface{}{"full_name": "Paciente CPF 2", "patient_cpf": "52998224725"}
-	raw2, _ := json.Marshal(body2)
+	raw2, err = json.Marshal(body2)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	req2 := httptest.NewRequest(http.MethodPost, "/api/patients", bytes.NewReader(raw2))
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Authorization", authz)
@@ -168,4 +181,3 @@ func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 		t.Fatalf("expected cpf field in response, got %s", rr3.Body.String())
 	}
 }
-

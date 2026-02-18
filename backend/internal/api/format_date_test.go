@@ -13,4 +13,3 @@ func TestFormatDateBR(t *testing.T) {
 		t.Fatalf("expected empty for invalid input, got %q", got)
 	}
 }
-

@@ -17,8 +17,6 @@ func SHA256Hex(data []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-const nonceSize = 12
-
 func Encrypt(plaintext []byte, keyVersion string, keysMap map[string][]byte) (ciphertext, nonce []byte, err error) {
 	key, ok := keysMap[keyVersion]
 	if !ok {

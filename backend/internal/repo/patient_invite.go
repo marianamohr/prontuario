@@ -11,12 +11,12 @@ import (
 )
 
 type PatientInvite struct {
-	ID              uuid.UUID
-	Token           string
+	ID               uuid.UUID
+	Token            string
 	ClinicID         uuid.UUID
 	GuardianEmail    string
 	GuardianFullName string
-	Status          string
+	Status           string
 	ExpiresAt        time.Time
 	CreatedAt        time.Time
 }
@@ -70,4 +70,3 @@ func AcceptPatientInvite(ctx context.Context, pool *pgxpool.Pool, inviteID uuid.
 	`, inviteID)
 	return err
 }
-

@@ -22,15 +22,15 @@ func GetOrCreateMedicalRecord(ctx context.Context, pool *pgxpool.Pool, patientID
 }
 
 type RecordEntry struct {
-	ID               uuid.UUID
-	MedicalRecordID  uuid.UUID
-	ContentEncrypted []byte
-	ContentNonce     []byte
+	ID                uuid.UUID
+	MedicalRecordID   uuid.UUID
+	ContentEncrypted  []byte
+	ContentNonce      []byte
 	ContentKeyVersion string
-	EntryDate        time.Time
-	AuthorID         uuid.UUID
-	AuthorType       string
-	CreatedAt        time.Time
+	EntryDate         time.Time
+	AuthorID          uuid.UUID
+	AuthorType        string
+	CreatedAt         time.Time
 }
 
 func RecordEntriesByMedicalRecord(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID) ([]RecordEntry, error) {

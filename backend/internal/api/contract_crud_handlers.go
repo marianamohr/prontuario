@@ -40,16 +40,16 @@ func (h *Handler) ListContractTemplates(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	type item struct {
-		ID       string `json:"id"`
-		Name     string `json:"name"`
-		Version  int    `json:"version"`
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Version int    `json:"version"`
 	}
 	out := make([]item, len(list))
 	for i := range list {
 		out[i] = item{ID: list[i].ID.String(), Name: list[i].Name, Version: list[i].Version}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"templates": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"templates": out})
 }
 
 func (h *Handler) CreateContractTemplate(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func (h *Handler) CreateContractTemplate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
 }
 
 func (h *Handler) GetContractTemplate(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +124,7 @@ func (h *Handler) GetContractTemplate(w http.ResponseWriter, r *http.Request) {
 		periodicidade = *tpl.Periodicidade
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"id": tpl.ID.String(), "name": tpl.Name, "body_html": tpl.BodyHTML, "version": tpl.Version,
 		"tipo_servico": tipoServico, "periodicidade": periodicidade,
 	})
@@ -228,7 +228,7 @@ func (h *Handler) ListContracts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
 }
 
 // ListPendingContracts retorna os contratos PENDING da clínica (para a home: contratos que faltam assinar).
@@ -263,7 +263,7 @@ func (h *Handler) ListPendingContracts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
 }
 
 // ListContractsForAgenda retorna apenas contratos assinados com nome do paciente e do modelo (para o modal de criar agendamentos na Agenda).
@@ -297,7 +297,7 @@ func (h *Handler) ListContractsForAgenda(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
 }
 
 func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
@@ -316,10 +316,10 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 		TemplateID      string `json:"template_id"`
 		SignerRelation  string `json:"signer_relation"`
 		SignerIsPatient bool   `json:"signer_is_patient"`
-		DataInicio      string `json:"data_inicio"`     // opcional, YYYY-MM-DD
-		DataFim         string `json:"data_fim"`        // opcional, YYYY-MM-DD
-		Valor           string `json:"valor"`           // opcional, valor do serviço
-		Periodicidade   string `json:"periodicidade"`   // opcional
+		DataInicio      string `json:"data_inicio"`   // opcional, YYYY-MM-DD
+		DataFim         string `json:"data_fim"`      // opcional, YYYY-MM-DD
+		Valor           string `json:"valor"`         // opcional, valor do serviço
+		Periodicidade   string `json:"periodicidade"` // opcional
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
@@ -383,8 +383,8 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 		signURL = h.Cfg.AppPublicURL + "/sign-contract?token=" + accessToken
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"contract_id": contractID.String(),
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"contract_id":  contractID.String(),
 		"access_token": accessToken,
 		"sign_url":     signURL,
 	})
@@ -412,16 +412,18 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 	bodyHTML := ""
 	tpl, err := repo.ContractTemplateByID(r.Context(), h.Pool, c.TemplateID)
 	if err == nil {
-		patient, _ := repo.PatientByID(r.Context(), h.Pool, c.PatientID)
-		guardian, _ := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
+		patient, errP := repo.PatientByID(r.Context(), h.Pool, c.PatientID)
+		_ = errP
+		guardian, errG := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
+		_ = errG
 		contratado := ""
-		if clinic, _ := repo.ClinicByID(r.Context(), h.Pool, c.ClinicID); clinic != nil {
+		if clinic, errClinic := repo.ClinicByID(r.Context(), h.Pool, c.ClinicID); errClinic == nil && clinic != nil {
 			contratado = clinic.Name
 		}
 		var sigData *string
 		var profName *string
 		if c.ProfessionalID != nil {
-			if prof, _ := repo.ProfessionalByID(r.Context(), h.Pool, *c.ProfessionalID); prof != nil {
+			if prof, errProf := repo.ProfessionalByID(r.Context(), h.Pool, *c.ProfessionalID); errProf == nil && prof != nil {
 				sigData = prof.SignatureImageData
 				profName = &prof.FullName
 			}
@@ -446,7 +448,8 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 		if periodicidadeVal == "" {
 			periodicidadeVal = strPtrVal(tpl.Periodicidade)
 		}
-		rules, _ := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+		rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+		_ = errRules
 		consultasPrevistas := FormatScheduleRulesText(rules)
 		localVal := strPtrVal(c.SignPlace)
 		dataAssinatura := ""
@@ -456,7 +459,7 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 		bodyHTML = FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), sigData, profName, dataInicio, dataFim, guardianSigHTML, consultasPrevistas, localVal, dataAssinatura)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"contract_id": c.ID.String(), "status": c.Status, "signed_at": signedAt,
 		"pdf_sha256": c.PDFSHA256, "verification_token": c.VerificationToken,
 		"body_html": bodyHTML,

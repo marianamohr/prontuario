@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
 )
 
 func CORS(origins []string) func(http.Handler) http.Handler {
@@ -29,14 +28,4 @@ func CORS(origins []string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-func splitTrim(s, sep string) []string {
-	var out []string
-	for _, p := range strings.Split(s, sep) {
-		if t := strings.TrimSpace(p); t != "" {
-			out = append(out, t)
-		}
-	}
-	return out
 }

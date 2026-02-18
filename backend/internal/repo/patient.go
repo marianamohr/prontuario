@@ -9,11 +9,11 @@ import (
 )
 
 type Patient struct {
-	ID        uuid.UUID
-	ClinicID  uuid.UUID
-	FullName  string
-	BirthDate *string
-	Email     *string
+	ID            uuid.UUID
+	ClinicID      uuid.UUID
+	FullName      string
+	BirthDate     *string
+	Email         *string
 	CPFEncrypted  []byte
 	CPFNonce      []byte
 	CPFKeyVersion *string

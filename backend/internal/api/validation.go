@@ -6,10 +6,10 @@ import (
 )
 
 var (
-	ErrInvalidEmail         = errors.New("invalid email")
-	ErrInvalidCPF           = errors.New("invalid cpf")
-	ErrInvalidGuardianAddr  = errors.New("invalid guardian address")
-	ErrInvalidCEP           = errors.New("invalid cep")
+	ErrInvalidEmail        = errors.New("invalid email")
+	ErrInvalidCPF          = errors.New("invalid cpf")
+	ErrInvalidGuardianAddr = errors.New("invalid guardian address")
+	ErrInvalidCEP          = errors.New("invalid cep")
 )
 
 // ValidateEmailRegex valida formato de e-mail com o regex padrão do backend.
@@ -52,4 +52,3 @@ func onlyDigits(s string) string {
 	}
 	return b.String()
 }
-

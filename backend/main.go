@@ -51,23 +51,23 @@ func main() {
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}).Methods(http.MethodGet)
 
 	r.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
 		if pool == nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status":"no database"}`))
+			_, _ = w.Write([]byte(`{"status":"no database"}`))
 			return
 		}
 		if err := pool.Ping(context.Background()); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status":"db unhealthy"}`))
+			_, _ = w.Write([]byte(`{"status":"db unhealthy"}`))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ready"}`))
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	}).Methods(http.MethodGet)
 
 	h := &api.Handler{Pool: pool, Cfg: cfg}

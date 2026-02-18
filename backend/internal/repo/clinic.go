@@ -8,14 +8,14 @@ import (
 )
 
 type Clinic struct {
-	ID                   uuid.UUID
-	Name                 string
-	PrimaryColor         *string
-	BackgroundColor      *string
-	HomeLabel            *string
-	HomeImageURL         *string
-	ActionButtonColor    *string
-	NegationButtonColor  *string
+	ID                  uuid.UUID
+	Name                string
+	PrimaryColor        *string
+	BackgroundColor     *string
+	HomeLabel           *string
+	HomeImageURL        *string
+	ActionButtonColor   *string
+	NegationButtonColor *string
 }
 
 type ClinicBranding struct {

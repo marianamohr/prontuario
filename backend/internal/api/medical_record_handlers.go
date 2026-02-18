@@ -91,12 +91,12 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 		keyVer = "v1"
 	}
 	type item struct {
-		ID        string `json:"id"`
-		Content   string `json:"content"`
-		EntryDate string `json:"entry_date"`
-		AuthorID  string `json:"author_id"`
+		ID         string `json:"id"`
+		Content    string `json:"content"`
+		EntryDate  string `json:"entry_date"`
+		AuthorID   string `json:"author_id"`
 		AuthorType string `json:"author_type"`
-		CreatedAt string `json:"created_at"`
+		CreatedAt  string `json:"created_at"`
 	}
 	out := make([]item, 0, len(entries))
 	for _, e := range entries {
@@ -120,7 +120,7 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 		h.logAccess(r, cid, auth.RoleFrom(r.Context()), aid, "READ", "MEDICAL_RECORD", &mrID, &patientID)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"entries": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"entries": out})
 }
 
 func (h *Handler) CreateRecordEntry(w http.ResponseWriter, r *http.Request) {
@@ -184,5 +184,5 @@ func (h *Handler) CreateRecordEntry(w http.ResponseWriter, r *http.Request) {
 	aid, _ := uuid.Parse(auth.UserIDFrom(r.Context()))
 	h.logAccess(r, cid, role, aid, "READ", "RECORD_ENTRY", &id, &patientID)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
 }

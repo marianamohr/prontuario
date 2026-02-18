@@ -63,7 +63,7 @@ func (h *Handler) ListPatients(w http.ResponseWriter, r *http.Request) {
 		out[i] = patientResp{ID: list[i].ID.String(), FullName: list[i].FullName, BirthDate: list[i].BirthDate}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"patients": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"patients": out})
 }
 
 func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
@@ -115,9 +115,11 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out["cpf"] = patientCPFStr
-	guardians, _ := repo.GuardiansByPatient(r.Context(), h.Pool, patientID)
+	guardians, errGuardians := repo.GuardiansByPatient(r.Context(), h.Pool, patientID)
+	_ = errGuardians
 	if len(guardians) > 0 {
-		g, _ := repo.LegalGuardianByID(r.Context(), h.Pool, guardians[0].ID)
+		g, errG := repo.LegalGuardianByID(r.Context(), h.Pool, guardians[0].ID)
+		_ = errG
 		if g != nil {
 			// Descriptografa CPF do responsável (para PROFESSIONAL do tenant / SUPER_ADMIN).
 			var cpfStr *string
@@ -143,7 +145,7 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 type UpdatePatientRequest struct {
@@ -366,12 +368,12 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Paciente atualizado."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Paciente atualizado."})
 }
 
 type CreatePatientRequest struct {
-	FullName  string  `json:"full_name"`
-	BirthDate *string `json:"birth_date,omitempty"`
+	FullName   string  `json:"full_name"`
+	BirthDate  *string `json:"birth_date,omitempty"`
 	PatientCPF *string `json:"patient_cpf,omitempty"`
 	// Com guardião legal (quando preenchido cria responsável + vínculo)
 	SamePerson        bool   `json:"same_person"`
@@ -477,18 +479,18 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			gPhone = &s
 		}
 		g := &repo.LegalGuardian{
-			Email:        req.GuardianEmail,
-			FullName:     req.GuardianFullName,
-			PasswordHash: nil,
+			Email:         req.GuardianEmail,
+			FullName:      req.GuardianFullName,
+			PasswordHash:  nil,
 			CPFEncrypted:  cpfEnc,
 			CPFNonce:      nonce,
 			CPFKeyVersion: &keyVer,
-			CPFHash:      &cpfHash,
-			Address:      &addr,
-			BirthDate:    &guardianBirth,
-			Phone:        gPhone,
-			AuthProvider: "LOCAL",
-			Status:       "ACTIVE",
+			CPFHash:       &cpfHash,
+			Address:       &addr,
+			BirthDate:     &guardianBirth,
+			Phone:         gPhone,
+			AuthProvider:  "LOCAL",
+			Status:        "ACTIVE",
 		}
 		if err := repo.CreateLegalGuardian(r.Context(), h.Pool, g); err != nil {
 			http.Error(w, `{"error":"email já utilizado ou internal"}`, http.StatusBadRequest)
@@ -543,7 +545,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]interface{}{"id": patientID.String()})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": patientID.String()})
 		return
 	}
 	if req.FullName == "" {
@@ -591,7 +593,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{"id": id.String()})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"id": id.String()})
 }
 
 func (h *Handler) ListPatientGuardians(w http.ResponseWriter, r *http.Request) {
@@ -621,7 +623,7 @@ func (h *Handler) ListPatientGuardians(w http.ResponseWriter, r *http.Request) {
 		out[i] = row{ID: list[i].ID.String(), FullName: list[i].FullName, Email: list[i].Email, Relation: list[i].Relation}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"guardians": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"guardians": out})
 }
 
 type SendContractRequest struct {
@@ -650,7 +652,11 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	patientIDStr := mux.Vars(r)["patientId"]
 	patientID, err := uuid.Parse(patientIDStr)
 	if err != nil {
@@ -674,8 +680,16 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"valor é obrigatório"}`, http.StatusBadRequest)
 		return
 	}
-	guardianID, _ := uuid.Parse(req.GuardianID)
-	templateID, _ := uuid.Parse(req.TemplateID)
+	guardianID, err := uuid.Parse(req.GuardianID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guardian_id"}`, http.StatusBadRequest)
+		return
+	}
+	templateID, err := uuid.Parse(req.TemplateID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid template_id"}`, http.StatusBadRequest)
+		return
+	}
 	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, templateID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"template not found"}`, http.StatusBadRequest)
@@ -694,8 +708,9 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 	var profID *uuid.UUID
 	if auth.RoleFrom(r.Context()) == auth.RoleProfessional {
 		userID := auth.UserIDFrom(r.Context())
-		p, _ := uuid.Parse(userID)
-		profID = &p
+		if p, e := uuid.Parse(userID); e == nil {
+			profID = &p
+		}
 	}
 	var startDate, endDate *time.Time
 	if req.DataInicio != "" {
@@ -763,7 +778,7 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato enviado por e-mail.", "contract_id": contractID.String()})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato enviado por e-mail.", "contract_id": contractID.String()})
 }
 
 // GetContractPreviewByID retorna o body_html de um contrato existente (para preview na lista, inclusive cancelados/encerrados).
@@ -817,7 +832,8 @@ func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"guardian not found"}`, http.StatusNotFound)
 		return
 	}
-	clinic, _ := repo.ClinicByID(r.Context(), h.Pool, c.ClinicID)
+	clinic, errClinic := repo.ClinicByID(r.Context(), h.Pool, c.ClinicID)
+	_ = errClinic
 	contratado := ""
 	if clinic != nil {
 		contratado = clinic.Name
@@ -852,11 +868,12 @@ func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request)
 	if objeto == "" {
 		objeto = tpl.Name
 	}
-	rules, _ := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+	rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+	_ = errRules
 	consultasPrevistas := FormatScheduleRulesText(rules)
 	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "")
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
 }
 
 // GetContractPreview retorna o body_html do modelo com placeholders preenchidos (paciente, responsável, contratado).
@@ -893,8 +910,16 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	dataInicioDisplay := formatDateBR(dataInicioStr)
 	dataFimDisplay := formatDateBR(dataFimStr)
-	guardianID, _ := uuid.Parse(guardianIDStr)
-	templateID, _ := uuid.Parse(templateIDStr)
+	guardianID, err := uuid.Parse(guardianIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid guardian_id"}`, http.StatusBadRequest)
+		return
+	}
+	templateID, err := uuid.Parse(templateIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid template_id"}`, http.StatusBadRequest)
+		return
+	}
 	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, templateID, *cid)
 	if err != nil {
 		http.Error(w, `{"error":"template not found"}`, http.StatusBadRequest)
@@ -915,7 +940,8 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"patient not found"}`, http.StatusBadRequest)
 		return
 	}
-	clinic, _ := repo.ClinicByID(r.Context(), h.Pool, *cid)
+	clinic, errClinic := repo.ClinicByID(r.Context(), h.Pool, *cid)
+	_ = errClinic // best-effort for display
 	contratado := ""
 	if clinic != nil {
 		contratado = clinic.Name
@@ -924,14 +950,15 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 	var professionalName *string
 	if auth.RoleFrom(r.Context()) == auth.RoleProfessional {
 		userID := auth.UserIDFrom(r.Context())
-		profID, _ := uuid.Parse(userID)
-		if prof, err := repo.ProfessionalByIDAndClinic(r.Context(), h.Pool, profID, *cid); err == nil {
-			signatureData = prof.SignatureImageData
-			professionalName = &prof.FullName
-			if contratado != "" {
-				contratado = prof.FullName + " – " + contratado
-			} else {
-				contratado = prof.FullName
+		if profID, e := uuid.Parse(userID); e == nil {
+			if prof, err := repo.ProfessionalByIDAndClinic(r.Context(), h.Pool, profID, *cid); err == nil {
+				signatureData = prof.SignatureImageData
+				professionalName = &prof.FullName
+				if contratado != "" {
+					contratado = prof.FullName + " – " + contratado
+				} else {
+					contratado = prof.FullName
+				}
 			}
 		}
 	}
@@ -946,7 +973,7 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 	consultasPrevistas := ""
 	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "")
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
 }
 
 // ListPatientContracts retorna os contratos enviados para o paciente (para a profissional ver status e reenviar/ver assinado).
@@ -1010,7 +1037,7 @@ func (h *Handler) ListPatientContracts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
 }
 
 // ResendContract reenvia o e-mail com link para assinatura de um contrato ainda pendente.
@@ -1074,7 +1101,7 @@ func (h *Handler) ResendContract(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato reenviado por e-mail."})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato reenviado por e-mail."})
 }
 
 // CancelContract cancela um contrato (PENDING ou SIGNED), marca como inativo e envia e-mail ao responsável.
@@ -1088,7 +1115,11 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	patientIDStr := mux.Vars(r)["patientId"]
 	contractIDStr := mux.Vars(r)["contractId"]
 	patientID, err := uuid.Parse(patientIDStr)
@@ -1210,7 +1241,7 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 			msg = "Contrato cancelado. " + strconv.Itoa(len(cancelledIDs)) + " agendamentos vinculados foram cancelados. O responsável foi notificado por e-mail."
 		}
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"message": msg})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": msg})
 }
 
 // SoftDeletePatient exclui um paciente (soft delete). Apenas SUPER_ADMIN.
@@ -1272,7 +1303,7 @@ func (h *Handler) SoftDeletePatient(w http.ResponseWriter, r *http.Request) {
 		Metadata:               map[string]interface{}{"changed_fields": []string{"deleted_at"}},
 	})
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Paciente excluído."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Paciente excluído."})
 }
 
 // SoftDeleteGuardian exclui um responsável legal (soft delete). Apenas SUPER_ADMIN.
@@ -1345,7 +1376,7 @@ func (h *Handler) SoftDeleteGuardian(w http.ResponseWriter, r *http.Request) {
 		Metadata:               map[string]interface{}{"changed_fields": []string{"deleted_at"}, "patient_id": patientID.String()},
 	})
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Responsável excluído."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Responsável excluído."})
 }
 
 // SoftDeleteContract exclui um contrato (soft delete). Apenas SUPER_ADMIN.
@@ -1357,17 +1388,28 @@ func (h *Handler) SoftDeleteContract(w http.ResponseWriter, r *http.Request) {
 	}
 	patientIDStr := mux.Vars(r)["patientId"]
 	contractIDStr := mux.Vars(r)["contractId"]
-	patientID, _ := uuid.Parse(patientIDStr)
-	contractID, _ := uuid.Parse(contractIDStr)
+	patientID, err := uuid.Parse(patientIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid patient_id"}`, http.StatusBadRequest)
+		return
+	}
+	contractID, err := uuid.Parse(contractIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid contract_id"}`, http.StatusBadRequest)
+		return
+	}
 	if !h.canAccessPatientAsProfessional(r, patientID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
 	var c *repo.Contract
-	var err error
 	clinicIDStr := auth.ClinicIDFrom(r.Context())
 	if clinicIDStr != nil && *clinicIDStr != "" {
-		cid, _ := uuid.Parse(*clinicIDStr)
+		cid, err := uuid.Parse(*clinicIDStr)
+		if err != nil {
+			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+			return
+		}
 		c, err = repo.ContractByIDAndClinic(r.Context(), h.Pool, contractID, cid)
 		if err != nil {
 			http.Error(w, `{"error":"contract not found"}`, http.StatusNotFound)
@@ -1426,5 +1468,5 @@ func (h *Handler) SoftDeleteContract(w http.ResponseWriter, r *http.Request) {
 		Metadata:               map[string]interface{}{"changed_fields": []string{"deleted_at"}},
 	})
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Contrato excluído."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Contrato excluído."})
 }

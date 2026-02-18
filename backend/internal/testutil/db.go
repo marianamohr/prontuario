@@ -50,4 +50,3 @@ func findMigrationsDir() (string, error) {
 	}
 	return "", errors.New("migrations dir not found from working directory")
 }
-

@@ -115,25 +115,24 @@ func (h *Handler) IngestFrontendError(w http.ResponseWriter, r *http.Request) {
 	k := kind
 	m := msg
 	ev := repo.ErrorEvent{
-		RequestID:             ridPtr,
-		Source:                "FRONTEND",
-		Severity:              sev,
-		ClinicID:              clinicID,
-		ActorType:             actorType,
-		ActorID:               actorID,
-		IsImpersonated:        isImpersonated,
+		RequestID:              ridPtr,
+		Source:                 "FRONTEND",
+		Severity:               sev,
+		ClinicID:               clinicID,
+		ActorType:              actorType,
+		ActorID:                actorID,
+		IsImpersonated:         isImpersonated,
 		ImpersonationSessionID: sessionID,
-		HTTPMethod:            method,
-		Path:                  path,
-		ActionName:            actionName,
-		Kind:                  &k,
-		Message:               &m,
-		Stack:                 stack,
-		Metadata:              meta,
+		HTTPMethod:             method,
+		Path:                   path,
+		ActionName:             actionName,
+		Kind:                   &k,
+		Message:                &m,
+		Stack:                  stack,
+		Metadata:               meta,
 	}
 	_ = repo.CreateErrorEvent(r.Context(), h.Pool, ev)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})
 }
-

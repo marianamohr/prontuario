@@ -10,17 +10,17 @@ import (
 )
 
 type backofficeRelatedPatient struct {
-	ID       string  `json:"id"`
-	FullName string  `json:"full_name"`
+	ID        string  `json:"id"`
+	FullName  string  `json:"full_name"`
 	BirthDate *string `json:"birth_date,omitempty"`
 }
 
 type backofficeRelatedGuardian struct {
-	ID          string `json:"id"`
-	FullName    string `json:"full_name"`
-	Email       string `json:"email"`
-	Status      string `json:"status"`
-	PatientsCount int  `json:"patients_count"`
+	ID            string `json:"id"`
+	FullName      string `json:"full_name"`
+	Email         string `json:"email"`
+	Status        string `json:"status"`
+	PatientsCount int    `json:"patients_count"`
 }
 
 // BackofficeProfessionalRelatedData retorna pacientes e responsáveis vinculados ao profissional (via clinic_id).
@@ -94,11 +94,10 @@ func (h *Handler) BackofficeProfessionalRelatedData(w http.ResponseWriter, r *ht
 	rows2.Close()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"professional_id": profID.String(),
 		"clinic_id":       clinicID.String(),
 		"patients":        patients,
 		"guardians":       guardians,
 	})
 }
-

@@ -44,11 +44,11 @@ func (h *Handler) GetScheduleConfig(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < 7; i++ {
 		out[i] = map[string]interface{}{
 			"day_of_week":                   i,
-			"enabled":                      false,
-			"start_time":                   nil,
-			"end_time":                     nil,
+			"enabled":                       false,
+			"start_time":                    nil,
+			"end_time":                      nil,
 			"consultation_duration_minutes": 50,
-			"interval_minutes":             10,
+			"interval_minutes":              10,
 			"lunch_start":                   nil,
 			"lunch_end":                     nil,
 		}
@@ -57,18 +57,18 @@ func (h *Handler) GetScheduleConfig(w http.ResponseWriter, r *http.Request) {
 		if s.DayOfWeek >= 0 && s.DayOfWeek < 7 {
 			out[s.DayOfWeek] = map[string]interface{}{
 				"day_of_week":                   s.DayOfWeek,
-				"enabled":                      s.Enabled,
-				"start_time":                   formatTime(s.StartTime),
-				"end_time":                     formatTime(s.EndTime),
+				"enabled":                       s.Enabled,
+				"start_time":                    formatTime(s.StartTime),
+				"end_time":                      formatTime(s.EndTime),
 				"consultation_duration_minutes": s.ConsultationDurationMinutes,
-				"interval_minutes":             s.IntervalMinutes,
-				"lunch_start":                  formatTime(s.LunchStart),
-				"lunch_end":                    formatTime(s.LunchEnd),
+				"interval_minutes":              s.IntervalMinutes,
+				"lunch_start":                   formatTime(s.LunchStart),
+				"lunch_end":                     formatTime(s.LunchEnd),
 			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"days": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"days": out})
 }
 
 // PutScheduleConfig atualiza a configuração de um ou mais dias.
@@ -89,14 +89,14 @@ func (h *Handler) PutScheduleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Days []struct {
-			DayOfWeek                  int     `json:"day_of_week"`
-			Enabled                    *bool   `json:"enabled"`
-			StartTime                  *string `json:"start_time"`
-			EndTime                    *string `json:"end_time"`
-			ConsultationDurationMinutes *int   `json:"consultation_duration_minutes"`
-			IntervalMinutes            *int   `json:"interval_minutes"`
-			LunchStart                 *string `json:"lunch_start"`
-			LunchEnd                   *string `json:"lunch_end"`
+			DayOfWeek                   int     `json:"day_of_week"`
+			Enabled                     *bool   `json:"enabled"`
+			StartTime                   *string `json:"start_time"`
+			EndTime                     *string `json:"end_time"`
+			ConsultationDurationMinutes *int    `json:"consultation_duration_minutes"`
+			IntervalMinutes             *int    `json:"interval_minutes"`
+			LunchStart                  *string `json:"lunch_start"`
+			LunchEnd                    *string `json:"lunch_end"`
 		} `json:"days"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -122,13 +122,13 @@ func (h *Handler) PutScheduleConfig(w http.ResponseWriter, r *http.Request) {
 			enabled = *d.Enabled
 		}
 		s := &repo.ScheduleConfig{
-			ClinicID:                   clinicID,
-			DayOfWeek:                  d.DayOfWeek,
-			Enabled:                    enabled,
-			StartTime:                  parseTime(d.StartTime),
-			EndTime:                    parseTime(d.EndTime),
+			ClinicID:                    clinicID,
+			DayOfWeek:                   d.DayOfWeek,
+			Enabled:                     enabled,
+			StartTime:                   parseTime(d.StartTime),
+			EndTime:                     parseTime(d.EndTime),
 			ConsultationDurationMinutes: 50,
-			IntervalMinutes:            10,
+			IntervalMinutes:             10,
 		}
 		if d.ConsultationDurationMinutes != nil && *d.ConsultationDurationMinutes > 0 {
 			s.ConsultationDurationMinutes = *d.ConsultationDurationMinutes
@@ -146,7 +146,7 @@ func (h *Handler) PutScheduleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Configuração salva."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Configuração salva."})
 }
 
 // CopyScheduleConfigDay copia a configuração de um dia para outro.
@@ -182,7 +182,7 @@ func (h *Handler) CopyScheduleConfigDay(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Dia copiado."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Dia copiado."})
 }
 
 // ListAppointments lista compromissos da clínica em um período.
@@ -229,19 +229,19 @@ func (h *Handler) ListAppointments(w http.ResponseWriter, r *http.Request) {
 			notes = *a.Notes
 		}
 		out[i] = map[string]interface{}{
-			"id":                a.ID.String(),
-			"patient_id":        a.PatientID.String(),
-			"patient_name":      a.PatientName,
-			"contract_id":       contractID,
-			"appointment_date":  a.AppointmentDate.Format("2006-01-02"),
-			"start_time":        a.StartTime.Format("15:04"),
-			"end_time":          a.EndTime.Format("15:04"),
-			"status":            a.Status,
-			"notes":             notes,
+			"id":               a.ID.String(),
+			"patient_id":       a.PatientID.String(),
+			"patient_name":     a.PatientName,
+			"contract_id":      contractID,
+			"appointment_date": a.AppointmentDate.Format("2006-01-02"),
+			"start_time":       a.StartTime.Format("15:04"),
+			"end_time":         a.EndTime.Format("15:04"),
+			"status":           a.Status,
+			"notes":            notes,
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"appointments": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"appointments": out})
 }
 
 // PatchAppointment altera um compromisso (data, horário, status, notas).
@@ -357,7 +357,7 @@ func (h *Handler) PatchAppointment(w http.ResponseWriter, r *http.Request) {
 		Metadata:               map[string]interface{}{"changed_fields": changed},
 	})
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Compromisso atualizado."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Compromisso atualizado."})
 }
 
 // EndContract define a data de término do contrato e encerra os agendamentos a partir dessa data.
@@ -368,8 +368,16 @@ func (h *Handler) EndContract(w http.ResponseWriter, r *http.Request) {
 	}
 	patientIDStr := mux.Vars(r)["patientId"]
 	contractIDStr := mux.Vars(r)["contractId"]
-	patientID, _ := uuid.Parse(patientIDStr)
-	contractID, _ := uuid.Parse(contractIDStr)
+	patientID, err := uuid.Parse(patientIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid patient_id"}`, http.StatusBadRequest)
+		return
+	}
+	contractID, err := uuid.Parse(contractIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid contract_id"}`, http.StatusBadRequest)
+		return
+	}
 	if !h.canAccessPatientAsProfessional(r, patientID) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
@@ -423,7 +431,8 @@ func (h *Handler) EndContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"não foi possível encerrar o contrato. Verifique se o status não foi alterado e tente novamente."}`, http.StatusBadRequest)
 		return
 	}
-	cancelledIDs, _ := repo.CancelAppointmentsByContractFromDateIDs(r.Context(), h.Pool, contractID, endDate)
+	cancelledIDs, errCancel := repo.CancelAppointmentsByContractFromDateIDs(r.Context(), h.Pool, contractID, endDate)
+	_ = errCancel // logado abaixo se len > 0; não falha a resposta
 	if len(cancelledIDs) > 0 {
 		log.Printf("[end-contract] %d agendamento(s) cancelado(s) a partir de %s", len(cancelledIDs), endDate.Format("02/01/2006"))
 	}
@@ -494,7 +503,7 @@ func (h *Handler) EndContract(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Contrato encerrado. Agendamentos a partir da data foram finalizados. O responsável foi notificado por e-mail."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Contrato encerrado. Agendamentos a partir da data foram finalizados. O responsável foi notificado por e-mail."})
 }
 
 // CreateAppointments cria um ou mais agendamentos vinculados a um contrato assinado.
@@ -546,8 +555,9 @@ func (h *Handler) CreateAppointments(w http.ResponseWriter, r *http.Request) {
 	if professionalID == nil && auth.RoleFrom(r.Context()) == auth.RoleProfessional {
 		userID := auth.UserIDFrom(r.Context())
 		if userID != "" {
-			p, _ := uuid.Parse(userID)
-			professionalID = &p
+			if p, e := uuid.Parse(userID); e == nil {
+				professionalID = &p
+			}
 		}
 	}
 	if professionalID == nil {
@@ -607,5 +617,5 @@ func (h *Handler) CreateAppointments(w http.ResponseWriter, r *http.Request) {
 		Metadata:               map[string]interface{}{"contract_id": contractID.String(), "affected_ids": createdIDs, "count": created},
 	})
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"message": "Agendamentos criados.", "created": created})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Agendamentos criados.", "created": created})
 }

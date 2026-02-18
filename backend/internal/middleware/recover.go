@@ -27,4 +27,3 @@ func Recover(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
-

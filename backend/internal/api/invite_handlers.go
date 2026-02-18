@@ -56,7 +56,7 @@ func (h *Handler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		_ = h.sendInviteEmail(req.Email, req.FullName, registerURL)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":    "Convite enviado por e-mail.",
 		"invite_id":  inv.ID.String(),
 		"expires_at": inv.ExpiresAt,
@@ -81,7 +81,7 @@ func (h *Handler) GetInviteByToken(w http.ResponseWriter, r *http.Request) {
 	var clinicName string
 	_ = h.Pool.QueryRow(r.Context(), "SELECT name FROM clinics WHERE id = $1", inv.ClinicID).Scan(&clinicName)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"email":       inv.Email,
 		"full_name":   inv.FullName,
 		"clinic_name": clinicName,
@@ -162,5 +162,5 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Cadastro concluído. Faça login na área do profissional."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Cadastro concluído. Faça login na área do profissional."})
 }

@@ -97,7 +97,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(LoginResponse{
+		_ = json.NewEncoder(w).Encode(LoginResponse{
 			Token:     tok,
 			ExpiresAt: time.Now().Add(24 * time.Hour),
 			User: UserInfo{
@@ -132,7 +132,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(LoginResponse{
+	_ = json.NewEncoder(w).Encode(LoginResponse{
 		Token:     tok,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		User: UserInfo{
@@ -171,7 +171,7 @@ func (h *Handler) LoginProfessional(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(LoginResponse{
+	_ = json.NewEncoder(w).Encode(LoginResponse{
 		Token:     tok,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		User: UserInfo{
@@ -209,7 +209,7 @@ func (h *Handler) LoginSuperAdmin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(LoginResponse{
+	_ = json.NewEncoder(w).Encode(LoginResponse{
 		Token:     tok,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		User: UserInfo{
@@ -234,7 +234,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(UserInfo{
+	_ = json.NewEncoder(w).Encode(UserInfo{
 		ID:       c.UserID,
 		Role:     c.Role,
 		ClinicID: c.ClinicID,
@@ -267,7 +267,7 @@ func (h *Handler) GetMySignature(w http.ResponseWriter, r *http.Request) {
 	if prof.SignatureImageData != nil {
 		sig = *prof.SignatureImageData
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{"signature_image_data": sig})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"signature_image_data": sig})
 }
 
 // PutMySignature atualiza a imagem de assinatura do profissional (apenas role PROFESSIONAL).
@@ -307,7 +307,7 @@ func (h *Handler) PutMySignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Assinatura atualizada."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Assinatura atualizada."})
 }
 
 // GetMyBranding retorna a aparência (white-label) da clínica do profissional.
@@ -409,7 +409,7 @@ func (h *Handler) PutMyBranding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Aparência atualizada."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Aparência atualizada."})
 }
 
 // GetMyProfile retorna dados editáveis do perfil do profissional (não inclui CPF).
@@ -438,7 +438,7 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":             p.ID.String(),
 		"email":          p.Email,
 		"full_name":      p.FullName,
@@ -507,5 +507,5 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Perfil atualizado."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Perfil atualizado."})
 }

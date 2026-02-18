@@ -45,4 +45,3 @@ func TestValidateGuardianAddress(t *testing.T) {
 		t.Fatal("expected error for invalid CEP digits")
 	}
 }
-

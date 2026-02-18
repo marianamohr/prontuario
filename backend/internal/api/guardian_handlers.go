@@ -73,15 +73,15 @@ func (h *Handler) GuardianRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g := &repo.LegalGuardian{
-		Email:          req.Email,
-		FullName:       req.FullName,
-		PasswordHash:   &passHash,
-		CPFEncrypted:   cpfEnc,
-		CPFNonce:       nonce,
-		CPFKeyVersion:  &keyVer,
-		CPFHash:        &cpfHash,
-		AuthProvider:   authProviderLocal,
-		Status:         "ACTIVE",
+		Email:         req.Email,
+		FullName:      req.FullName,
+		PasswordHash:  &passHash,
+		CPFEncrypted:  cpfEnc,
+		CPFNonce:      nonce,
+		CPFKeyVersion: &keyVer,
+		CPFHash:       &cpfHash,
+		AuthProvider:  authProviderLocal,
+		Status:        "ACTIVE",
 	}
 	err = repo.CreateLegalGuardian(r.Context(), h.Pool, g)
 	if err != nil {
@@ -98,7 +98,7 @@ func (h *Handler) GuardianRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(LoginResponse{
+	_ = json.NewEncoder(w).Encode(LoginResponse{
 		Token:     tok,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		User: UserInfo{
@@ -139,7 +139,7 @@ func (h *Handler) GuardianLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(LoginResponse{
+	_ = json.NewEncoder(w).Encode(LoginResponse{
 		Token:     tok,
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 		User: UserInfo{

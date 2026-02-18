@@ -13,15 +13,15 @@ import (
 // ScheduleConfig é a configuração de agenda de um dia da semana (day_of_week 0=domingo .. 6=sábado).
 // Enabled: só dias com enabled=true aparecem para configurar e na agenda.
 type ScheduleConfig struct {
-	ClinicID                   uuid.UUID
-	DayOfWeek                  int
-	Enabled                    bool
-	StartTime                  *time.Time
-	EndTime                    *time.Time
+	ClinicID                    uuid.UUID
+	DayOfWeek                   int
+	Enabled                     bool
+	StartTime                   *time.Time
+	EndTime                     *time.Time
 	ConsultationDurationMinutes int
-	IntervalMinutes            int
-	LunchStart                 *time.Time
-	LunchEnd                   *time.Time
+	IntervalMinutes             int
+	LunchStart                  *time.Time
+	LunchEnd                    *time.Time
 }
 
 func GetScheduleConfig(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, dayOfWeek int) (*ScheduleConfig, error) {
@@ -101,26 +101,26 @@ func CopyScheduleConfigDay(ctx context.Context, pool *pgxpool.Pool, clinicID uui
 		if err == pgx.ErrNoRows {
 			// Dia de origem sem configuração: usar padrão (50 min, 10 interval, sem horários); destino fica habilitado
 			fromC = &ScheduleConfig{
-				ClinicID:                   clinicID,
-				DayOfWeek:                  fromDay,
-				Enabled:                    true,
+				ClinicID:                    clinicID,
+				DayOfWeek:                   fromDay,
+				Enabled:                     true,
 				ConsultationDurationMinutes: 50,
-				IntervalMinutes:            10,
+				IntervalMinutes:             10,
 			}
 		} else {
 			return err
 		}
 	}
 	toC := &ScheduleConfig{
-		ClinicID:                   clinicID,
-		DayOfWeek:                  toDay,
-		Enabled:                    fromC.Enabled,
-		StartTime:                  fromC.StartTime,
-		EndTime:                    fromC.EndTime,
+		ClinicID:                    clinicID,
+		DayOfWeek:                   toDay,
+		Enabled:                     fromC.Enabled,
+		StartTime:                   fromC.StartTime,
+		EndTime:                     fromC.EndTime,
 		ConsultationDurationMinutes: fromC.ConsultationDurationMinutes,
-		IntervalMinutes:            fromC.IntervalMinutes,
-		LunchStart:                 fromC.LunchStart,
-		LunchEnd:                   fromC.LunchEnd,
+		IntervalMinutes:             fromC.IntervalMinutes,
+		LunchStart:                  fromC.LunchStart,
+		LunchEnd:                    fromC.LunchEnd,
 	}
 	return UpsertScheduleConfig(ctx, pool, toC)
 }
@@ -165,16 +165,16 @@ func ListContractScheduleRules(ctx context.Context, pool *pgxpool.Pool, contract
 
 // Appointment é um compromisso na agenda.
 type Appointment struct {
-	ID             uuid.UUID
-	ClinicID       uuid.UUID
-	ProfessionalID uuid.UUID
-	PatientID      uuid.UUID
-	ContractID     *uuid.UUID
+	ID              uuid.UUID
+	ClinicID        uuid.UUID
+	ProfessionalID  uuid.UUID
+	PatientID       uuid.UUID
+	ContractID      *uuid.UUID
 	AppointmentDate time.Time
-	StartTime      time.Time
-	EndTime        time.Time
-	Status         string
-	Notes          *string
+	StartTime       time.Time
+	EndTime         time.Time
+	Status          string
+	Notes           *string
 }
 
 func CreateAppointment(ctx context.Context, pool *pgxpool.Pool, clinicID, professionalID, patientID uuid.UUID, contractID *uuid.UUID, appointmentDate time.Time, startTime, endTime time.Time, status, notes string) (uuid.UUID, error) {

@@ -26,4 +26,3 @@ func OptionalAuth(secret []byte, next http.Handler) http.Handler {
 func OptionalAuthMiddleware(secret []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler { return OptionalAuth(secret, next) }
 }
-

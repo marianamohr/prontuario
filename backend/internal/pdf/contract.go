@@ -23,7 +23,7 @@ type SignatureBlock struct {
 	ExplanatoryText              string
 	ProfessionalSignatureDataURL *string // data URL (ex.: data:image/png;base64,...) para imagem da assinatura do profissional
 	ProfessionalName             *string // nome do profissional (usado em fonte cursiva quando não há imagem)
-	GuardianSignatureName       string  // nome do responsável para exibir como assinatura em cursiva no bloco
+	GuardianSignatureName        string  // nome do responsável para exibir como assinatura em cursiva no bloco
 }
 
 // decodeDataURLImage extrai tipo (png/jpeg) e bytes de um data URL (data:image/png;base64,...).

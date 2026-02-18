@@ -8,12 +8,12 @@ import (
 )
 
 type PatientGuardian struct {
-	ID                  uuid.UUID
-	PatientID           uuid.UUID
-	LegalGuardianID     uuid.UUID
-	Relation            string
+	ID                   uuid.UUID
+	PatientID            uuid.UUID
+	LegalGuardianID      uuid.UUID
+	Relation             string
 	CanViewMedicalRecord bool
-	CanViewContracts    bool
+	CanViewContracts     bool
 }
 
 func PatientGuardianByPatientAndGuardian(ctx context.Context, pool *pgxpool.Pool, patientID, guardianID uuid.UUID) (*PatientGuardian, error) {

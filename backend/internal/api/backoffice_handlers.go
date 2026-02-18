@@ -55,7 +55,7 @@ func (h *Handler) ListClinics(w http.ResponseWriter, r *http.Request) {
 		list = append(list, c)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"clinics": list})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"clinics": list})
 }
 
 func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
@@ -82,22 +82,37 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var u userRow
 			var cid *string
-			rows.Scan(&u.Type, &u.ID, &u.Email, &u.FullName, &cid, &u.Status)
+			if err := rows.Scan(&u.Type, &u.ID, &u.Email, &u.FullName, &cid, &u.Status); err != nil {
+				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+				return
+			}
 			if cid != nil {
 				u.ClinicID = *cid
 			}
 			list = append(list, u)
 		}
 		rows.Close()
-		rows2, _ := h.Pool.Query(r.Context(), "SELECT 'LEGAL_GUARDIAN' as type, id, email, full_name, status FROM legal_guardians WHERE deleted_at IS NULL")
+		rows2, err := h.Pool.Query(r.Context(), "SELECT 'LEGAL_GUARDIAN' as type, id, email, full_name, status FROM legal_guardians WHERE deleted_at IS NULL")
+		if err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
 		for rows2.Next() {
 			var u userRow
-			rows2.Scan(&u.Type, &u.ID, &u.Email, &u.FullName, &u.Status)
+			if err := rows2.Scan(&u.Type, &u.ID, &u.Email, &u.FullName, &u.Status); err != nil {
+				rows2.Close()
+				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+				return
+			}
 			list = append(list, u)
 		}
 		rows2.Close()
 	} else {
-		cid, _ := uuid.Parse(clinicID)
+		cid, err := uuid.Parse(clinicID)
+		if err != nil {
+			http.Error(w, `{"error":"invalid clinic_id"}`, http.StatusBadRequest)
+			return
+		}
 		rows, err := h.Pool.Query(r.Context(), "SELECT id, email, full_name, status FROM professionals WHERE clinic_id = $1", cid)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -107,13 +122,16 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 			var u userRow
 			u.Type = "PROFESSIONAL"
 			u.ClinicID = clinicID
-			rows.Scan(&u.ID, &u.Email, &u.FullName, &u.Status)
+			if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &u.Status); err != nil {
+				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+				return
+			}
 			list = append(list, u)
 		}
 		rows.Close()
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"users": list})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"users": list})
 }
 
 type BackofficeUserDetailResponse struct {
@@ -225,7 +243,7 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"user": resp})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"user": resp})
 }
 
 type PatchBackofficeUserRequest struct {
@@ -474,7 +492,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 	}
 	// Retorna o usuário atualizado
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Usuário atualizado."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Usuário atualizado."})
 }
 
 func (h *Handler) ImpersonateStart(w http.ResponseWriter, r *http.Request) {
@@ -501,11 +519,15 @@ func (h *Handler) ImpersonateStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	adminID := auth.UserIDFrom(r.Context())
-	adminUUID, _ := uuid.Parse(adminID)
+	adminUUID, err := uuid.Parse(adminID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid admin"}`, http.StatusInternalServerError)
+		return
+	}
 	var clinicID *uuid.UUID
 	if req.TargetUserType == "PROFESSIONAL" {
 		var cid uuid.UUID
-		if h.Pool.QueryRow(r.Context(), "SELECT clinic_id FROM professionals WHERE id = $1", targetID).Scan(&cid) == nil {
+		if err := h.Pool.QueryRow(r.Context(), "SELECT clinic_id FROM professionals WHERE id = $1", targetID).Scan(&cid); err == nil {
 			clinicID = &cid
 		}
 	}
@@ -524,7 +546,7 @@ func (h *Handler) ImpersonateStart(w http.ResponseWriter, r *http.Request) {
 	_ = repo.CreateAuditEvent(r.Context(), h.Pool, "IMPERSONATION_START", "SUPER_ADMIN", &adminUUID, map[string]string{
 		"target_user_type": req.TargetUserType, "target_user_id": req.TargetUserID, "reason": req.Reason, "session_id": sessionID.String()})
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ImpersonateStartResponse{Token: tok, SessionID: sessionID.String(), ExpiresIn: int(exp.Seconds())})
+	_ = json.NewEncoder(w).Encode(ImpersonateStartResponse{Token: tok, SessionID: sessionID.String(), ExpiresIn: int(exp.Seconds())})
 }
 
 func ptrString(s string) *string { return &s }
@@ -551,5 +573,5 @@ func (h *Handler) ImpersonateEnd(w http.ResponseWriter, r *http.Request) {
 		"request_id": r.Header.Get("X-Request-ID"),
 	})
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"message":"Impersonation ended."}`))
+	_, _ = w.Write([]byte(`{"message":"Impersonation ended."}`))
 }

@@ -66,13 +66,14 @@ func (h *Handler) GetContractByToken(w http.ResponseWriter, r *http.Request) {
 	if periodicidadeVal == "" {
 		periodicidadeVal = strPtrVal(tpl.Periodicidade)
 	}
-	rules, _ := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+	rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+	_ = errRules
 	consultasPrevistas := FormatScheduleRulesText(rules)
 	// Apenas [DATA] é substituída (data do dia em que a pessoa abre o link, DD/MM/AAAA). Local já vem no template.
 	dataVal := time.Now().Format("02/01/2006")
 	bodyHTML := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), signatureData, professionalName, dataInicio, dataFim, "", consultasPrevistas, "", dataVal)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ContractByTokenResponse{
+	_ = json.NewEncoder(w).Encode(ContractByTokenResponse{
 		ContractID:      c.ID.String(),
 		PatientName:     patient.FullName,
 		GuardianName:    guardian.FullName,
@@ -85,9 +86,9 @@ func (h *Handler) GetContractByToken(w http.ResponseWriter, r *http.Request) {
 }
 
 type SignContractRequest struct {
-	Token          string `json:"token"`
-	AcceptedTerms  bool   `json:"accepted_terms"`
-	SignatureFont  string `json:"signature_font"` // opcional: "cursive", "brush", "dancing" — fonte da assinatura do responsável
+	Token         string `json:"token"`
+	AcceptedTerms bool   `json:"accepted_terms"`
+	SignatureFont string `json:"signature_font"` // opcional: "cursive", "brush", "dancing" — fonte da assinatura do responsável
 }
 
 func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
@@ -111,8 +112,7 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	}
 	guardianID := auth.UserIDFrom(r.Context())
 	if guardianID != "" {
-		gUUID, _ := uuid.Parse(guardianID)
-		if gUUID != guardian.ID {
+		if gUUID, e := uuid.Parse(guardianID); e == nil && gUUID != guardian.ID {
 			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 			return
 		}
@@ -146,7 +146,8 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	if periodicidadeVal == "" {
 		periodicidadeVal = strPtrVal(tpl.Periodicidade)
 	}
-	rules, _ := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+	rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+	_ = errRules
 	consultasPrevistas := FormatScheduleRulesText(rules)
 	// Data/hora real da assinatura (para o bloco de assinatura eletrônica no PDF)
 	signedAtReal := time.Now().Format("02/01/2006 15:04:05")
@@ -173,10 +174,10 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 		googleSubVal = *guardian.GoogleSub
 	}
 	auditFinal, _ := json.Marshal(map[string]interface{}{
-		"guardian_id":        guardian.ID.String(),
+		"guardian_id":       guardian.ID.String(),
 		"guardian_email":    guardian.Email,
 		"google_sub":        googleSubVal,
-		"ip":                 r.RemoteAddr,
+		"ip":                r.RemoteAddr,
 		"user_agent":        r.UserAgent(),
 		"accepted_terms":    true,
 		"accepted_terms_at": time.Now().Format(time.RFC3339),
@@ -184,7 +185,7 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 		"patient_id":        c.PatientID.String(),
 		"legal_guardian_id": c.LegalGuardianID.String(),
 		"template_version":  c.TemplateVersion,
-		"pdf_sha256":         pdfSHA256,
+		"pdf_sha256":        pdfSHA256,
 	})
 
 	pdfURL := ""
@@ -218,14 +219,14 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	}
 
 	guardianUUID := guardian.ID
-	repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED", "LEGAL_GUARDIAN", &guardianUUID, map[string]string{"contract_id": c.ID.String(), "patient_id": c.PatientID.String()})
+	_ = repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED", "LEGAL_GUARDIAN", &guardianUUID, map[string]string{"contract_id": c.ID.String(), "patient_id": c.PatientID.String()})
 	if h.sendContractSignedEmail != nil {
 		_ = h.sendContractSignedEmail(guardian.Email, guardian.FullName, pdfBytes, verificationToken)
-		repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED_EMAIL_SENT", "SYSTEM", nil, map[string]string{"contract_id": c.ID.String(), "to": guardian.Email})
+		_ = repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED_EMAIL_SENT", "SYSTEM", nil, map[string]string{"contract_id": c.ID.String(), "to": guardian.Email})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	_ = json.NewEncoder(w).Encode(map[string]string{
 		"message":            "Contrato assinado com sucesso.",
 		"verification_token": verificationToken,
 	})

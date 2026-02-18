@@ -32,7 +32,9 @@ func TestFillContractBody_DataReplaceAndNoLocalReplace(t *testing.T) {
 	}
 }
 
-func contains(s, sub string) bool { return len(sub) == 0 || (len(s) >= len(sub) && (func() bool { return indexOf(s, sub) >= 0 })()) }
+func contains(s, sub string) bool {
+	return len(sub) == 0 || (len(s) >= len(sub) && (func() bool { return indexOf(s, sub) >= 0 })())
+}
 
 func indexOf(s, sub string) int {
 	// tiny helper to avoid importing strings everywhere in tests
@@ -43,4 +45,3 @@ func indexOf(s, sub string) int {
 	}
 	return -1
 }
-

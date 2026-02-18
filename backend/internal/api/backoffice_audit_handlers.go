@@ -12,24 +12,24 @@ import (
 )
 
 type timelineRow struct {
-	Kind                  string          `json:"kind"`
-	ID                    string          `json:"id"`
-	Action                string          `json:"action"`
-	ActorType             string          `json:"actor_type"`
-	ActorID               *string         `json:"actor_id,omitempty"`
-	ClinicID              *string         `json:"clinic_id,omitempty"`
-	RequestID             *string         `json:"request_id,omitempty"`
-	IP                    *string         `json:"ip,omitempty"`
-	UserAgent             *string         `json:"user_agent,omitempty"`
-	ResourceType          *string         `json:"resource_type,omitempty"`
-	ResourceID            *string         `json:"resource_id,omitempty"`
-	PatientID             *string         `json:"patient_id,omitempty"`
-	IsImpersonated        bool            `json:"is_impersonated"`
-	ImpersonationSessionID *string        `json:"impersonation_session_id,omitempty"`
-	Source                string          `json:"source"`
-	Severity              string          `json:"severity"`
-	Metadata              json.RawMessage `json:"metadata,omitempty"`
-	CreatedAt             string          `json:"created_at"`
+	Kind                   string          `json:"kind"`
+	ID                     string          `json:"id"`
+	Action                 string          `json:"action"`
+	ActorType              string          `json:"actor_type"`
+	ActorID                *string         `json:"actor_id,omitempty"`
+	ClinicID               *string         `json:"clinic_id,omitempty"`
+	RequestID              *string         `json:"request_id,omitempty"`
+	IP                     *string         `json:"ip,omitempty"`
+	UserAgent              *string         `json:"user_agent,omitempty"`
+	ResourceType           *string         `json:"resource_type,omitempty"`
+	ResourceID             *string         `json:"resource_id,omitempty"`
+	PatientID              *string         `json:"patient_id,omitempty"`
+	IsImpersonated         bool            `json:"is_impersonated"`
+	ImpersonationSessionID *string         `json:"impersonation_session_id,omitempty"`
+	Source                 string          `json:"source"`
+	Severity               string          `json:"severity"`
+	Metadata               json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt              string          `json:"created_at"`
 }
 
 // BackofficeTimeline retorna uma timeline unificada (audit_events + access_logs), ordenada por created_at desc.
@@ -218,27 +218,27 @@ func (h *Handler) BackofficeTimeline(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"items": out, "limit": limit, "offset": offset})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"items": out, "limit": limit, "offset": offset})
 }
 
 type errorEventRow struct {
-	ID        string  `json:"id"`
-	CreatedAt string  `json:"created_at"`
-	RequestID *string `json:"request_id,omitempty"`
-	Source    string  `json:"source"`
-	Severity  string  `json:"severity"`
-	ClinicID  *string `json:"clinic_id,omitempty"`
-	ActorType *string `json:"actor_type,omitempty"`
-	ActorID   *string `json:"actor_id,omitempty"`
-	Path      *string `json:"path,omitempty"`
-	Method    *string `json:"http_method,omitempty"`
-	ActionName *string `json:"action_name,omitempty"`
-	Kind      *string `json:"kind,omitempty"`
-	Message   *string `json:"message,omitempty"`
-	Stack     *string `json:"stack,omitempty"`
-	PGCode    *string `json:"pg_code,omitempty"`
-	PGMessage *string `json:"pg_message,omitempty"`
-	Metadata  json.RawMessage `json:"metadata,omitempty"`
+	ID         string          `json:"id"`
+	CreatedAt  string          `json:"created_at"`
+	RequestID  *string         `json:"request_id,omitempty"`
+	Source     string          `json:"source"`
+	Severity   string          `json:"severity"`
+	ClinicID   *string         `json:"clinic_id,omitempty"`
+	ActorType  *string         `json:"actor_type,omitempty"`
+	ActorID    *string         `json:"actor_id,omitempty"`
+	Path       *string         `json:"path,omitempty"`
+	Method     *string         `json:"http_method,omitempty"`
+	ActionName *string         `json:"action_name,omitempty"`
+	Kind       *string         `json:"kind,omitempty"`
+	Message    *string         `json:"message,omitempty"`
+	Stack      *string         `json:"stack,omitempty"`
+	PGCode     *string         `json:"pg_code,omitempty"`
+	PGMessage  *string         `json:"pg_message,omitempty"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
 }
 
 func (h *Handler) BackofficeErrors(w http.ResponseWriter, r *http.Request) {
@@ -317,7 +317,7 @@ func (h *Handler) BackofficeErrors(w http.ResponseWriter, r *http.Request) {
 		out = append(out, row)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"items": out, "limit": limit, "offset": offset})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"items": out, "limit": limit, "offset": offset})
 }
 
 func nullIfEmpty(s string) *string {
@@ -327,4 +327,3 @@ func nullIfEmpty(s string) *string {
 	t := strings.TrimSpace(s)
 	return &t
 }
-

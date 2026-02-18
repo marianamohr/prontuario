@@ -27,7 +27,7 @@ func TestIntegration_Health(t *testing.T) {
 	r := mux.NewRouter()
 	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}).Methods(http.MethodGet)
 
 	_ = url
@@ -40,4 +40,3 @@ func TestIntegration_Health(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rr.Code)
 	}
 }
-

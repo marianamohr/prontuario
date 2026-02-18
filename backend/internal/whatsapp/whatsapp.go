@@ -69,6 +69,9 @@ func (c *Client) send(to, body string) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
-	slurp, _ := io.ReadAll(resp.Body)
+	slurp, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("whatsapp: %s: read body: %w", resp.Status, err)
+	}
 	return fmt.Errorf("whatsapp: %s: %s", resp.Status, string(slurp))
 }

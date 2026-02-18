@@ -9,23 +9,23 @@ import (
 )
 
 type ErrorEvent struct {
-	RequestID             *string
-	Source                string
-	Severity              string
-	ClinicID              *uuid.UUID
-	ActorType             *string
-	ActorID               *uuid.UUID
-	IsImpersonated        bool
+	RequestID              *string
+	Source                 string
+	Severity               string
+	ClinicID               *uuid.UUID
+	ActorType              *string
+	ActorID                *uuid.UUID
+	IsImpersonated         bool
 	ImpersonationSessionID *uuid.UUID
-	HTTPMethod            *string
-	Path                  *string
-	ActionName            *string
-	Kind                  *string
-	Message               *string
-	Stack                 *string
-	PGCode                *string
-	PGMessage             *string
-	Metadata              interface{}
+	HTTPMethod             *string
+	Path                   *string
+	ActionName             *string
+	Kind                   *string
+	Message                *string
+	Stack                  *string
+	PGCode                 *string
+	PGMessage              *string
+	Metadata               interface{}
 }
 
 func CreateErrorEvent(ctx context.Context, pool *pgxpool.Pool, ev ErrorEvent) error {
@@ -51,4 +51,3 @@ func CreateErrorEvent(ctx context.Context, pool *pgxpool.Pool, ev ErrorEvent) er
 		ev.Kind, ev.Message, ev.Stack, ev.PGCode, ev.PGMessage, meta)
 	return err
 }
-

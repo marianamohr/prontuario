@@ -8,18 +8,18 @@ import (
 )
 
 const (
-	RoleProfessional = "PROFESSIONAL"
+	RoleProfessional  = "PROFESSIONAL"
 	RoleLegalGuardian = "LEGAL_GUARDIAN"
-	RoleSuperAdmin   = "SUPER_ADMIN"
+	RoleSuperAdmin    = "SUPER_ADMIN"
 )
 
 type Claims struct {
 	jwt.RegisteredClaims
-	UserID                string    `json:"user_id"`
-	Role                  string    `json:"role"`
-	ClinicID              *string   `json:"clinic_id,omitempty"`
-	IsImpersonated        bool      `json:"is_impersonated"`
-	ImpersonationSessionID *string   `json:"impersonation_session_id,omitempty"`
+	UserID                 string  `json:"user_id"`
+	Role                   string  `json:"role"`
+	ClinicID               *string `json:"clinic_id,omitempty"`
+	IsImpersonated         bool    `json:"is_impersonated"`
+	ImpersonationSessionID *string `json:"impersonation_session_id,omitempty"`
 }
 
 func BuildJWT(secret []byte, userID, role string, clinicID *string, isImpersonated bool, impersonationSessionID *string, exp time.Duration) (string, error) {
@@ -31,10 +31,10 @@ func BuildJWT(secret []byte, userID, role string, clinicID *string, isImpersonat
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(exp)),
 		},
-		UserID:         userID,
-		Role:           role,
-		ClinicID:       clinicID,
-		IsImpersonated: isImpersonated,
+		UserID:                 userID,
+		Role:                   role,
+		ClinicID:               clinicID,
+		IsImpersonated:         isImpersonated,
 		ImpersonationSessionID: impersonationSessionID,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

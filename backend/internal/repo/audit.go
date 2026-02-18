@@ -29,7 +29,11 @@ type AuditEvent struct {
 func CreateAuditEventFull(ctx context.Context, pool *pgxpool.Pool, ev AuditEvent) error {
 	var meta []byte
 	if ev.Metadata != nil {
-		meta, _ = json.Marshal(ev.Metadata)
+		var marshalErr error
+		meta, marshalErr = json.Marshal(ev.Metadata)
+		if marshalErr != nil {
+			return marshalErr
+		}
 	}
 	_, err := pool.Exec(ctx, `
 		INSERT INTO audit_events (

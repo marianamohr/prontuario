@@ -62,7 +62,7 @@ func (h *Handler) CreatePatientInvite(w http.ResponseWriter, r *http.Request) {
 		_ = h.sendPatientInviteEmail(req.Email, req.FullName, registerURL)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":    "Convite enviado por e-mail.",
 		"invite_id":  inv.ID.String(),
 		"expires_at": inv.ExpiresAt,
@@ -87,7 +87,7 @@ func (h *Handler) GetPatientInviteByToken(w http.ResponseWriter, r *http.Request
 	var clinicName string
 	_ = h.Pool.QueryRow(r.Context(), "SELECT name FROM clinics WHERE id = $1", inv.ClinicID).Scan(&clinicName)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"email":       inv.GuardianEmail,
 		"full_name":   inv.GuardianFullName,
 		"clinic_name": clinicName,
@@ -96,14 +96,14 @@ func (h *Handler) GetPatientInviteByToken(w http.ResponseWriter, r *http.Request
 }
 
 type AcceptPatientInviteRequest struct {
-	Token            string `json:"token"`
-	SamePerson       bool   `json:"same_person"`
-	GuardianFullName string `json:"guardian_full_name"`
-	GuardianCPF      string `json:"guardian_cpf"`
-	GuardianAddress  string `json:"guardian_address"`
+	Token             string `json:"token"`
+	SamePerson        bool   `json:"same_person"`
+	GuardianFullName  string `json:"guardian_full_name"`
+	GuardianCPF       string `json:"guardian_cpf"`
+	GuardianAddress   string `json:"guardian_address"`
 	GuardianBirthDate string `json:"guardian_birth_date"`
-	PatientFullName  string `json:"patient_full_name"`
-	PatientBirthDate string `json:"patient_birth_date"`
+	PatientFullName   string `json:"patient_full_name"`
+	PatientBirthDate  string `json:"patient_birth_date"`
 }
 
 func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
@@ -261,6 +261,5 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Cadastro do paciente concluído."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Cadastro do paciente concluído."})
 }
-
