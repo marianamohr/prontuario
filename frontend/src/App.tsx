@@ -22,6 +22,7 @@ const RecordEntries = lazy(() => import('./pages/RecordEntries').then((m) => ({ 
 const PatientContracts = lazy(() => import('./pages/PatientContracts').then((m) => ({ default: m.PatientContracts })))
 const RegisterProfessional = lazy(() => import('./pages/RegisterProfessional').then((m) => ({ default: m.RegisterProfessional })))
 const RegisterPatient = lazy(() => import('./pages/RegisterPatient').then((m) => ({ default: m.RegisterPatient })))
+const Remarcar = lazy(() => import('./pages/Remarcar').then((m) => ({ default: m.Remarcar })))
 const ContractTemplates = lazy(() => import('./pages/ContractTemplates').then((m) => ({ default: m.ContractTemplates })))
 const Appearance = lazy(() => import('./pages/Appearance').then((m) => ({ default: m.Appearance })))
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })))
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="reset-password" element={<ResetPassword />} />
             <Route path="register" element={<RegisterProfessional />} />
             <Route path="register-patient" element={<RegisterPatient />} />
+            <Route path="remarcar" element={<Remarcar />} />
             <Route
               path="patients"
               element={

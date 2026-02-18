@@ -41,6 +41,8 @@ services:
       SMTP_PORT: "1025"
       SMTP_FROM_NAME: Prontuário Saúde
       SMTP_FROM_EMAIL: noreply@localhost
+      REMINDER_SERVICE_URL: http://reminder:8081
+      REMINDER_API_KEY: ${REMINDER_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +64,22 @@ services:
       - "3000:80"  # alternativa: http://localhost:3000 (use se a porta 80 estiver ocupada)
     depends_on:
       - backend
+
+  reminder:
+    build:
+      context: ./reminder
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      DATABASE_URL: postgres://prontuario:prontuario_secret@postgres:5432/prontuario?sslmode=disable
+      REMINDER_CRON_TZ: America/Sao_Paulo
+      REMINDER_API_KEY: ${REMINDER_API_KEY:-}
+      APP_PUBLIC_URL: http://localhost:80
+      # TWILIO_* se quiser testar envio real
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

@@ -294,6 +294,8 @@ No painel do serviço, procure “SMTP settings” e use host, porta, usuário e
 
 Usado pelo job de **lembretes de consulta** (WhatsApp). Se não configurar, lembretes por WhatsApp ficam desativados.
 
+O reminder roda como **serviço separado** na pasta `/reminder` (deploy independente no Railway). Código-fonte permanece em `backend/cmd/reminder` e `backend/internal/reminder`.
+
 | Variável | Significado |
 |----------|-------------|
 | `TWILIO_ACCOUNT_SID` | Account SID da conta Twilio |
@@ -306,16 +308,32 @@ Usado pelo job de **lembretes de consulta** (WhatsApp). Se não configurar, lemb
 2. No **Console** (dashboard): anote **Account SID** e **Auth Token** (revele o token).  
 3. **Messaging** → **Try it out** → **Send a WhatsApp message**: siga o passo a passo para ativar o sandbox ou vincular seu número.  
 4. O “From” no WhatsApp costuma ser algo como `whatsapp:+14155238886` (número do sandbox ou do seu número Twilio).  
-5. Defina as três variáveis no ambiente do backend (ou no `cmd/reminder` se rodar em processo separado).  
-6. O job de reminder também usa `DATABASE_URL` e, se aplicável, `REMINDER_CRON_TZ` (timezone do cron).
+5. Defina as três variáveis no ambiente do serviço **reminder** (pasta `/reminder`).  
+                                                                                                                                            6. O reminder também usa `DATABASE_URL`, `REMINDER_CRON_TZ` e `APP_PUBLIC_URL` (para links de confirmar/remarcar no WhatsApp).
 
 ---
 
-## 10. REMINDER_CRON_TZ (opcional – só para o job de reminder)
+## 10. REMINDER_CRON_TZ (opcional – só para o serviço reminder)
 
-**O que é:** Timezone para o agendamento do cron de lembretes (ex.: `America/Sao_Paulo`).
+**O que é:** Timezone para o cálculo da data dos lembretes (ex.: `America/Sao_Paulo`).
 
-**Onde definir:** No ambiente do processo que roda o `cmd/reminder` (se for um serviço separado). Se não definir, o binário de reminder pode usar o timezone do sistema.
+**Onde definir:** No ambiente do serviço **reminder** (pasta `/reminder`). Se não definir, usa UTC.
+
+---
+
+## 11. Reminder API (serviço reminder)
+
+O reminder expõe uma API HTTP com endpoint `POST /trigger` para disparar lembretes manualmente (usado pelo backoffice).
+
+| Variável | Onde | Significado |
+|----------|------|-------------|
+| `REMINDER_SERVICE_URL` | Backend | URL do serviço reminder (ex.: `http://reminder:8081` em Docker, ou URL pública em produção) |
+| `REMINDER_API_KEY` | Backend e Reminder | Chave para autenticar chamadas ao reminder. Se vazia no reminder, o endpoint não exige autenticação. |
+| `PORT` | Reminder | Porta HTTP (padrão 8081) |
+
+**Endpoint:** `POST /trigger?professional_id=uuid` (professional_id opcional – filtra por profissional).  
+**Autenticação:** Header `X-API-Key` ou query `api_key`, se `REMINDER_API_KEY` estiver definido.  
+**Resposta:** `{"sent": N, "skipped": M, "date": "YYYY-MM-DD"}`
 
 ---
 

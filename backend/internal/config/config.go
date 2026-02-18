@@ -24,6 +24,9 @@ type Config struct {
 	TwilioAccountSid   string
 	TwilioAuthToken    string
 	TwilioWhatsAppFrom string
+	// Serviço reminder (cron separado) – para proxy do backoffice
+	ReminderServiceURL string
+	ReminderAPIKey     string
 }
 
 func Load() *Config {
@@ -60,9 +63,11 @@ func Load() *Config {
 		SMTPFromEmail:      getEnv("SMTP_FROM_EMAIL", "noreply@localhost"),
 		AppPublicURL:       getEnv("APP_PUBLIC_URL", "http://localhost:5173"),
 		BackendPublicURL:   getEnv("BACKEND_PUBLIC_URL", "http://localhost:8080"),
-		TwilioAccountSid:   os.Getenv("TWILIO_ACCOUNT_SID"),
-		TwilioAuthToken:    os.Getenv("TWILIO_AUTH_TOKEN"),
-		TwilioWhatsAppFrom: os.Getenv("TWILIO_WHATSAPP_FROM"),
+		TwilioAccountSid:     os.Getenv("TWILIO_ACCOUNT_SID"),
+		TwilioAuthToken:      os.Getenv("TWILIO_AUTH_TOKEN"),
+		TwilioWhatsAppFrom:   os.Getenv("TWILIO_WHATSAPP_FROM"),
+		ReminderServiceURL:   os.Getenv("REMINDER_SERVICE_URL"),
+		ReminderAPIKey:       os.Getenv("REMINDER_API_KEY"),
 	}
 }
 

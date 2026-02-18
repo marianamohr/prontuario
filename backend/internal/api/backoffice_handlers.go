@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -591,6 +593,41 @@ func (h *Handler) CleanupOrphanAddresses(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"deleted": deleted, "message": "Endereços órfãos removidos."})
+}
+
+// TriggerReminder dispara os lembretes de consulta via serviço reminder (proxy). Aceita professional_id opcional.
+func (h *Handler) TriggerReminder(w http.ResponseWriter, r *http.Request) {
+	if !auth.IsSuperAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	if h.Cfg.ReminderServiceURL == "" {
+		http.Error(w, `{"error":"REMINDER_SERVICE_URL não configurado"}`, http.StatusServiceUnavailable)
+		return
+	}
+	url := strings.TrimSuffix(h.Cfg.ReminderServiceURL, "/") + "/trigger"
+	if idStr := r.URL.Query().Get("professional_id"); idStr != "" {
+		url += "?professional_id=" + idStr
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, url, bytes.NewReader(nil))
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	if h.Cfg.ReminderAPIKey != "" {
+		req.Header.Set("X-API-Key", h.Cfg.ReminderAPIKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("[backoffice] reminder trigger: %v", err)
+		http.Error(w, `{"error":"falha ao chamar serviço reminder"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = w.Write(body)
 }
 
 func (h *Handler) ImpersonateStart(w http.ResponseWriter, r *http.Request) {

@@ -123,6 +123,9 @@ func main() {
 	apiRouter.HandleFunc("/contracts/by-token", h.GetContractByToken).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/contracts/sign", h.SignContract).Methods(http.MethodPost)
 	r.HandleFunc("/api/contracts/verify/{token}", h.GetContractVerify).Methods(http.MethodGet)
+	r.HandleFunc("/api/appointments/remarcar/{token}", h.GetRemarcarByToken).Methods(http.MethodGet)
+	r.HandleFunc("/api/appointments/remarcar/{token}/confirm", h.ConfirmRemarcar).Methods(http.MethodPost)
+	r.HandleFunc("/api/appointments/remarcar/{token}", h.RemarcarAppointment).Methods(http.MethodPatch)
 	apiRouter.HandleFunc("/invites/by-token", h.GetInviteByToken).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/invites/accept", h.AcceptInvite).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/patient-invites/by-token", h.GetPatientInviteByToken).Methods(http.MethodGet)
@@ -186,6 +189,7 @@ func main() {
 	protected.Handle("/backoffice/invites", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.CreateInvite))).Methods(http.MethodPost)
 	protected.Handle("/backoffice/invites/{id}", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.DeleteInvite))).Methods(http.MethodDelete)
 	protected.Handle("/backoffice/invites/{id}/resend", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ResendInvite))).Methods(http.MethodPost)
+	protected.Handle("/backoffice/reminder/trigger", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.TriggerReminder))).Methods(http.MethodPost)
 	protected.Handle("/backoffice/impersonate/start", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ImpersonateStart))).Methods(http.MethodPost)
 	protected.HandleFunc("/backoffice/impersonate/end", h.ImpersonateEnd).Methods(http.MethodPost)
 

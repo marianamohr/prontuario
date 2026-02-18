@@ -589,6 +589,36 @@ export function resendInvite(id: string) {
   })
 }
 
+export function getRemarcarByToken(token: string) {
+  return api<{
+    appointment_id: string
+    patient_name: string
+    current_date: string
+    current_start_time: string
+    slots: { date: string; start_time: string }[]
+  }>(`/api/appointments/remarcar/${encodeURIComponent(token)}`)
+}
+
+export function confirmRemarcar(token: string) {
+  return api<{ message: string }>(`/api/appointments/remarcar/${encodeURIComponent(token)}/confirm`, {
+    method: 'POST',
+  })
+}
+
+export function remarcarAppointment(token: string, appointment_date: string, start_time: string) {
+  return api<{ message: string }>(`/api/appointments/remarcar/${encodeURIComponent(token)}`, {
+    method: 'PATCH',
+    json: { appointment_date, start_time },
+  })
+}
+
+export function triggerReminder(professionalId?: string) {
+  const q = professionalId ? `?professional_id=${encodeURIComponent(professionalId)}` : ''
+  return api<{ sent: number; skipped: number; date: string }>(`/api/backoffice/reminder/trigger${q}`, {
+    method: 'POST',
+  })
+}
+
 export type BackofficeTimelineItem = {
   kind: 'AUDIT' | 'ACCESS'
   id: string

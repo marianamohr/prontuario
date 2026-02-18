@@ -80,6 +80,10 @@ export function Backoffice() {
   const [editCPF, setEditCPF] = useState('')
   const [showCPF, setShowCPF] = useState(false)
   const [editNewPassword, setEditNewPassword] = useState('')
+  const [reminderProfessionalId, setReminderProfessionalId] = useState('')
+  const [reminderLoading, setReminderLoading] = useState(false)
+  const [reminderResult, setReminderResult] = useState<{ sent: number; skipped: number } | null>(null)
+  const [reminderError, setReminderError] = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -315,6 +319,50 @@ export function Backoffice() {
       <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         <Button variant="contained" onClick={() => navigate('/backoffice/invites')}>Enviar convite para profissional</Button>
       </Box>
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1 }}>Lembretes de consulta (amanhã)</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Dispara lembretes WhatsApp para consultas de amanhã. Opcional: ID do profissional para enviar só dele.
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TextField
+            size="small"
+            label="ID do profissional (opcional)"
+            placeholder="UUID do profissional"
+            value={reminderProfessionalId}
+            onChange={(e) => setReminderProfessionalId(e.target.value)}
+            sx={{ minWidth: 280 }}
+          />
+          <Button
+            variant="outlined"
+            disabled={reminderLoading}
+            onClick={async () => {
+              setReminderLoading(true)
+              setReminderResult(null)
+              setReminderError('')
+              try {
+                const res = await api.triggerReminder(reminderProfessionalId.trim() || undefined)
+                setReminderResult({ sent: res.sent, skipped: res.skipped })
+              } catch (e) {
+                setReminderError(e instanceof Error ? e.message : 'Erro ao disparar lembretes')
+              } finally {
+                setReminderLoading(false)
+              }
+            }}
+          >
+            {reminderLoading ? 'Disparando...' : 'Disparar lembretes'}
+          </Button>
+        </Box>
+        {reminderResult && (
+          <Alert severity="success" sx={{ mt: 1 }}>
+            Enviados: {reminderResult.sent}, ignorados: {reminderResult.skipped}
+          </Alert>
+        )}
+        {reminderError && (
+          <Alert severity="error" sx={{ mt: 1 }}>{reminderError}</Alert>
+        )}
+      </Paper>
       <Box sx={{ mb: 2 }}>
         <Button variant="outlined" size="small" onClick={load}>Atualizar</Button>
       </Box>
