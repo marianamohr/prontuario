@@ -37,6 +37,15 @@ func TestParseKeysEnv(t *testing.T) {
 	if len(m["v1"]) != 32 {
 		t.Fatalf("key length: %d", len(m["v1"]))
 	}
+	// formato antigo 44 chars com "=" (ex-default no Railway) também deve funcionar
+	envOld := "v1:" + key + "="
+	mOld, err := ParseKeysEnv(envOld)
+	if err != nil {
+		t.Fatalf("ParseKeysEnv (44 chars): %v", err)
+	}
+	if len(mOld["v1"]) != 32 {
+		t.Fatalf("key length (44 chars): %d", len(mOld["v1"]))
+	}
 	// múltiplas chaves (43 chars = 32 bytes decoded)
 	env2 := "v1:" + key + ", v2:" + strings.Repeat("B", 43)
 	m2, err := ParseKeysEnv(env2)

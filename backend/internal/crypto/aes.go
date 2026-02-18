@@ -77,6 +77,10 @@ func ParseKeysEnv(env string) (map[string][]byte, error) {
 		}
 		ver := strings.TrimSpace(part[:idx])
 		b64 := strings.TrimSpace(part[idx+1:])
+		// 44 chars com "=" no fim decodifica para 33 bytes e quebra; normaliza para 43 chars
+		if len(b64) == 44 && strings.HasSuffix(b64, "=") {
+			b64 = b64[:43]
+		}
 		var key []byte
 		var err error
 		if len(b64)%4 == 3 {

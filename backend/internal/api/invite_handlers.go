@@ -247,6 +247,7 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	cpfHash := &ch
 	keysMap, err := crypto.ParseKeysEnv(h.Cfg.DataEncryptionKeys)
 	if err != nil {
+		log.Printf("[invite] accept: DATA_ENCRYPTION_KEYS inválida: %v", err)
 		http.Error(w, `{"error":"config"}`, http.StatusInternalServerError)
 		return
 	}
