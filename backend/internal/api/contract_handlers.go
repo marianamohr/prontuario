@@ -151,10 +151,12 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
 	_ = errRules
 	consultasPrevistas := FormatScheduleRulesText(rules)
-	// Data/hora real da assinatura (para o bloco de assinatura eletrônica no PDF)
-	signedAtReal := time.Now().Format("02/01/2006 15:04:05")
+	// Data/hora real da assinatura no fuso do Brasil (para o bloco de assinatura eletrônica no PDF)
+	locBR, _ := time.LoadLocation("America/Sao_Paulo")
+	nowBR := time.Now().In(locBR)
+	signedAtReal := nowBR.Format("02/01/2006 15:04:05")
 	// Apenas [DATA] no corpo: data do dia da assinatura (DD/MM/AAAA). Local já vem no template.
-	dataNoCorpo := time.Now().Format("02/01/2006")
+	dataNoCorpo := nowBR.Format("02/01/2006")
 	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
 	bodyHTML := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), signatureData, professionalName, dataInicio, dataFim, guardianSigHTML, consultasPrevistas, "", dataNoCorpo, guardianAddrStr)
 	verificationToken := uuid.New().String()
