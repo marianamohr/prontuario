@@ -50,7 +50,7 @@ func Load() *Config {
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		JWTSecret:          []byte(jwtSecret),
 		CORSOrigins:        origins,
-		DataEncryptionKeys: getEnv("DATA_ENCRYPTION_KEYS", "v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="),
+		DataEncryptionKeys: getEnv("DATA_ENCRYPTION_KEYS", "v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
 		CurrentDataKeyVer:  getEnv("CURRENT_DATA_KEY_VERSION", "v1"),
 		SMTPHost:           getEnv("SMTP_HOST", "localhost"),
 		SMTPPort:           getEnv("SMTP_PORT", "1025"),

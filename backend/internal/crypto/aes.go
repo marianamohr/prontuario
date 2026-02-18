@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 )
@@ -76,19 +77,25 @@ func ParseKeysEnv(env string) (map[string][]byte, error) {
 		}
 		ver := strings.TrimSpace(part[:idx])
 		b64 := strings.TrimSpace(part[idx+1:])
-		// StdEncoding exige tamanho múltiplo de 4; adiciona padding se precisar
-		switch len(b64) % 4 {
-		case 2:
-			b64 += "=="
-		case 3:
-			b64 += "="
+		var key []byte
+		var err error
+		if len(b64)%4 == 3 {
+			// 43 chars em base64 = 32 bytes; sem padding usa RawStdEncoding
+			key, err = base64.RawStdEncoding.DecodeString(b64)
+		} else {
+			switch len(b64) % 4 {
+			case 2:
+				b64 += "=="
+			case 3:
+				b64 += "="
+			}
+			key, err = base64.StdEncoding.DecodeString(b64)
 		}
-		key, err := base64.StdEncoding.DecodeString(b64)
 		if err != nil {
 			return nil, err
 		}
 		if len(key) != 32 {
-			return nil, errors.New("key must be 32 bytes for AES-256")
+			return nil, fmt.Errorf("key must be 32 bytes for AES-256 (got %d)", len(key))
 		}
 		out[ver] = key
 	}
