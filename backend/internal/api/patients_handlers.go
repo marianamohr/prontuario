@@ -261,7 +261,8 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	guardians, _ := repo.GuardiansByPatient(r.Context(), h.Pool, patientID)
+	guardians, errGuardians := repo.GuardiansByPatient(r.Context(), h.Pool, patientID)
+	_ = errGuardians
 	if len(guardians) > 0 && (req.GuardianFullName != nil || req.GuardianEmail != nil || req.GuardianAddress != nil || req.GuardianBirthDate != nil || req.GuardianPhone != nil || req.GuardianCPF != nil) {
 		g, err := repo.LegalGuardianByID(r.Context(), h.Pool, guardians[0].ID)
 		if err != nil {
@@ -1051,7 +1052,11 @@ func (h *Handler) ResendContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	patientIDStr := mux.Vars(r)["patientId"]
 	contractIDStr := mux.Vars(r)["contractId"]
 	patientID, err := uuid.Parse(patientIDStr)

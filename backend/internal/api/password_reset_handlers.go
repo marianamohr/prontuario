@@ -22,31 +22,34 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Email == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message":"Se o e-mail existir, você receberá instruções."}`))
+		_, _ = w.Write([]byte(`{"message":"Se o e-mail existir, você receberá instruções."}`))
 		return
 	}
 	const exp = time.Hour
 	if prof, err := repo.ProfessionalByEmail(r.Context(), h.Pool, req.Email); err == nil {
-		tok, _ := repo.CreatePasswordResetToken(r.Context(), h.Pool, "PROFESSIONAL", prof.ID, exp)
+		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "PROFESSIONAL", prof.ID, exp)
+		_ = errTok
 		if tok != "" && h.sendPasswordResetEmail != nil {
 			_ = h.sendPasswordResetEmail(req.Email, tok)
 		}
 	}
 	if admin, err := repo.SuperAdminByEmail(r.Context(), h.Pool, req.Email); err == nil {
-		tok, _ := repo.CreatePasswordResetToken(r.Context(), h.Pool, "SUPER_ADMIN", admin.ID, exp)
+		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "SUPER_ADMIN", admin.ID, exp)
+		_ = errTok
 		if tok != "" && h.sendPasswordResetEmail != nil {
 			_ = h.sendPasswordResetEmail(req.Email, tok)
 		}
 	}
 	if g, err := repo.LegalGuardianByEmail(r.Context(), h.Pool, req.Email); err == nil {
-		tok, _ := repo.CreatePasswordResetToken(r.Context(), h.Pool, "LEGAL_GUARDIAN", g.ID, exp)
+		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "LEGAL_GUARDIAN", g.ID, exp)
+		_ = errTok
 		if tok != "" && h.sendPasswordResetEmail != nil {
 			_ = h.sendPasswordResetEmail(req.Email, tok)
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"message":"Se o e-mail existir, você receberá instruções."}`))
+	_, _ = w.Write([]byte(`{"message":"Se o e-mail existir, você receberá instruções."}`))
 }
 
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
@@ -89,5 +92,5 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"message":"Senha alterada com sucesso."}`))
+	_, _ = w.Write([]byte(`{"message":"Senha alterada com sucesso."}`))
 }

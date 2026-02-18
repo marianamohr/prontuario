@@ -62,7 +62,10 @@ Você solicitou a redefinição de senha. Clique no link abaixo (válido por 1 h
 {{.ResetURL}}
 
 Se você não solicitou isso, ignore este e-mail.`
-	t, _ := template.New("").Parse(tpl)
+	t, err := template.New("").Parse(tpl)
+	if err != nil {
+		return err
+	}
 	var b bytes.Buffer
 	_ = t.Execute(&b, map[string]string{"ResetURL": resetURL})
 	return c.Send(to, "Redefinição de senha - Prontuário Saúde", b.String(), false)
@@ -76,7 +79,10 @@ Há um contrato disponível para sua assinatura. Acesse o link abaixo para ler e
 {{.SignURL}}
 
 Se você não esperava este e-mail, ignore-o.`
-	t, _ := template.New("").Parse(tpl)
+	t, err := template.New("").Parse(tpl)
+	if err != nil {
+		return err
+	}
 	var b bytes.Buffer
 	_ = t.Execute(&b, map[string]string{"FullName": fullName, "SignURL": signURL})
 	return c.Send(to, "Contrato para assinatura - Prontuário Saúde", b.String(), false)
@@ -89,7 +95,10 @@ func (c *Config) SendContractCancelled(to, fullName string) error {
 Informamos que o contrato que estava em seu nome foi cancelado e está inativo (tornado ineligível).
 
 Se você tiver dúvidas, entre em contato com a clínica ou o profissional que atende.`
-	t, _ := template.New("").Parse(tpl)
+	t, err := template.New("").Parse(tpl)
+	if err != nil {
+		return err
+	}
 	var b bytes.Buffer
 	_ = t.Execute(&b, map[string]string{"FullName": fullName})
 	return c.Send(to, "Contrato cancelado - Prontuário Saúde", b.String(), false)
@@ -102,7 +111,10 @@ func (c *Config) SendContractEnded(to, fullName, endDate string) error {
 Informamos que o contrato que estava em seu nome foi encerrado. O serviço foi prestado até {{.EndDate}} e, a partir dessa data, não é mais ofertado.
 
 Se você tiver dúvidas, entre em contato com a clínica ou o profissional que atende.`
-	t, _ := template.New("").Parse(tpl)
+	t, err := template.New("").Parse(tpl)
+	if err != nil {
+		return err
+	}
 	var b bytes.Buffer
 	_ = t.Execute(&b, map[string]string{"FullName": fullName, "EndDate": endDate})
 	return c.Send(to, "Contrato encerrado - Prontuário Saúde", b.String(), false)
@@ -116,7 +128,10 @@ Você foi convidado a se cadastrar como profissional no Prontuário Saúde. Para
 {{.RegisterURL}}
 
 Este link expira em 7 dias. Se você não esperava este convite, ignore este e-mail.`
-	t, _ := template.New("").Parse(tpl)
+	t, err := template.New("").Parse(tpl)
+	if err != nil {
+		return err
+	}
 	var b bytes.Buffer
 	_ = t.Execute(&b, map[string]string{"FullName": fullName, "RegisterURL": registerURL})
 	return c.Send(to, "Convite para cadastro - Prontuário Saúde", b.String(), false)
@@ -133,14 +148,18 @@ Para continuar, acesse:
 {{.RegisterURL}}
 
 Este link expira em 7 dias. Se você não esperava este e-mail, ignore.`
-	t, _ := template.New("").Parse(tpl)
+	t, err := template.New("").Parse(tpl)
+	if err != nil {
+		return err
+	}
 	var b bytes.Buffer
 	_ = t.Execute(&b, map[string]string{"FullName": fullName, "RegisterURL": registerURL})
 	return c.Send(to, "Convite para cadastro de paciente - Prontuário Saúde", b.String(), false)
 }
 
 func PortFromString(s string) int {
-	n, _ := strconv.Atoi(s)
+	n, err := strconv.Atoi(s)
+	_ = err
 	return n
 }
 
@@ -169,8 +188,8 @@ func (c *Config) SendWithAttachment(to, subject, body string, attachmentName str
 	buf.WriteString("Content-Transfer-Encoding: base64\r\n")
 	buf.WriteString("Content-Disposition: attachment; filename=\"" + attachmentName + "\"\r\n\r\n")
 	b64 := base64.NewEncoder(base64.StdEncoding, &buf)
-	b64.Write(attachmentPDF)
-	b64.Close()
+	_, _ = b64.Write(attachmentPDF)
+	_ = b64.Close()
 	buf.WriteString("\r\n--" + boundary + "--\r\n")
 	return smtp.SendMail(addr, c.authForSend(), c.FromAddr, []string{to}, buf.Bytes())
 }

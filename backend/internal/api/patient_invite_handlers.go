@@ -167,7 +167,7 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	defer tx.Rollback(r.Context())
+	defer func() { _ = tx.Rollback(r.Context()) }()
 
 	// Recarrega o invite na TX (evita race).
 	var inviteID uuid.UUID

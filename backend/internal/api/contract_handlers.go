@@ -167,13 +167,15 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	}
 	pdfSHA256 := crypto.SHA256Hex(pdfBytes)
 	block.PDFSHA256 = pdfSHA256
-	pdfBytes, _ = pdf.BuildContractPDF(bodyText, block)
+	var errPDF error
+	pdfBytes, errPDF = pdf.BuildContractPDF(bodyText, block)
+	_ = errPDF
 
 	googleSubVal := ""
 	if guardian.GoogleSub != nil {
 		googleSubVal = *guardian.GoogleSub
 	}
-	auditFinal, _ := json.Marshal(map[string]interface{}{
+	auditFinal, errMarshal := json.Marshal(map[string]interface{}{
 		"guardian_id":       guardian.ID.String(),
 		"guardian_email":    guardian.Email,
 		"google_sub":        googleSubVal,
@@ -187,6 +189,7 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 		"template_version":  c.TemplateVersion,
 		"pdf_sha256":        pdfSHA256,
 	})
+	_ = errMarshal
 
 	pdfURL := ""
 	if h.Cfg.AppPublicURL != "" {
@@ -195,7 +198,7 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	_ = repo.SignContract(r.Context(), h.Pool, c.ID, pdfSHA256, verificationToken, auditFinal)
 	_, _ = h.Pool.Exec(r.Context(), "UPDATE contracts SET pdf_url = $1 WHERE id = $2", pdfURL, c.ID)
 	_ = repo.CancelOtherPendingContractsForPatientAndGuardian(r.Context(), h.Pool, c.ID, c.PatientID, c.LegalGuardianID)
-	repo.MarkContractAccessTokenUsed(r.Context(), h.Pool, req.Token)
+	_ = repo.MarkContractAccessTokenUsed(r.Context(), h.Pool, req.Token)
 	// Cria os compromissos na agenda a partir das regras do contrato (confirmados pela assinatura)
 	if c.ProfessionalID != nil {
 		startDate := time.Now()

@@ -25,13 +25,19 @@ func (h *Handler) ListContractTemplates(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	var list []repo.ContractTemplate
-	var err error
+	var profID *uuid.UUID
 	if auth.RoleFrom(r.Context()) == auth.RoleProfessional {
 		userID := auth.UserIDFrom(r.Context())
-		profID, _ := uuid.Parse(userID)
-		list, err = repo.ContractTemplatesByClinicAndProfessional(r.Context(), h.Pool, cid, &profID)
+		if p, e := uuid.Parse(userID); e == nil {
+			profID = &p
+		}
+		list, err = repo.ContractTemplatesByClinicAndProfessional(r.Context(), h.Pool, cid, profID)
 	} else {
 		list, err = repo.ContractTemplatesByClinic(r.Context(), h.Pool, cid)
 	}
@@ -72,12 +78,17 @@ func (h *Handler) CreateContractTemplate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"name and body_html required"}`, http.StatusBadRequest)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	var profID *uuid.UUID
 	if auth.RoleFrom(r.Context()) == auth.RoleProfessional {
 		userID := auth.UserIDFrom(r.Context())
-		p, _ := uuid.Parse(userID)
-		profID = &p
+		if p, e := uuid.Parse(userID); e == nil {
+			profID = &p
+		}
 	}
 	id, err := repo.CreateContractTemplate(r.Context(), h.Pool, cid, profID, req.Name, req.BodyHTML, req.TipoServico, req.Periodicidade)
 	if err != nil {
@@ -104,7 +115,11 @@ func (h *Handler) GetContractTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, id, cid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -153,7 +168,11 @@ func (h *Handler) UpdateContractTemplate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	if req.Version <= 0 {
 		req.Version = 1
 	}
@@ -162,7 +181,7 @@ func (h *Handler) UpdateContractTemplate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"ok":true}`))
+	_, _ = w.Write([]byte(`{"ok":true}`))
 }
 
 func (h *Handler) DeleteContractTemplate(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +196,11 @@ func (h *Handler) DeleteContractTemplate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	if err := repo.DeleteContractTemplate(r.Context(), h.Pool, id, cid); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
@@ -201,7 +224,11 @@ func (h *Handler) ListContracts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	list, err := repo.ContractsByClinic(r.Context(), h.Pool, cid)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -242,7 +269,11 @@ func (h *Handler) ListPendingContracts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	list, err := repo.PendingContractsByClinic(r.Context(), h.Pool, cid)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -277,7 +308,11 @@ func (h *Handler) ListContractsForAgenda(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
 	list, err := repo.SignedContractsByClinicWithDetails(r.Context(), h.Pool, cid)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -329,10 +364,26 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"patient_id, legal_guardian_id, template_id, signer_relation required"}`, http.StatusBadRequest)
 		return
 	}
-	cid, _ := uuid.Parse(*clinicID)
-	patientID, _ := uuid.Parse(req.PatientID)
-	guardianID, _ := uuid.Parse(req.LegalGuardianID)
-	templateID, _ := uuid.Parse(req.TemplateID)
+	cid, err := uuid.Parse(*clinicID)
+	if err != nil {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	patientID, err := uuid.Parse(req.PatientID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid patient_id"}`, http.StatusBadRequest)
+		return
+	}
+	guardianID, err := uuid.Parse(req.LegalGuardianID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid legal_guardian_id"}`, http.StatusBadRequest)
+		return
+	}
+	templateID, err := uuid.Parse(req.TemplateID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid template_id"}`, http.StatusBadRequest)
+		return
+	}
 	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, templateID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"template not found"}`, http.StatusBadRequest)
@@ -346,8 +397,9 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 	var profID *uuid.UUID
 	if auth.RoleFrom(r.Context()) == auth.RoleProfessional {
 		userID := auth.UserIDFrom(r.Context())
-		p, _ := uuid.Parse(userID)
-		profID = &p
+		if p, e := uuid.Parse(userID); e == nil {
+			profID = &p
+		}
 	}
 	var startDate, endDate *time.Time
 	if req.DataInicio != "" {

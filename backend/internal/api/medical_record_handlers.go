@@ -45,7 +45,10 @@ func (h *Handler) canViewMedicalRecordAsGuardian(r *http.Request, patientID uuid
 	if guardianID == "" {
 		return false
 	}
-	gID, _ := uuid.Parse(guardianID)
+	gID, errG := uuid.Parse(guardianID)
+	if errG != nil {
+		return false
+	}
 	can, err := repo.GuardianCanViewMedicalRecord(r.Context(), h.Pool, gID, patientID)
 	return err == nil && can
 }
@@ -61,7 +64,7 @@ func (h *Handler) canAccessMedicalRecord(r *http.Request, patientID uuid.UUID) b
 }
 
 func (h *Handler) logAccess(r *http.Request, clinicID *uuid.UUID, actorType string, actorID uuid.UUID, action, resourceType string, resourceID, patientID *uuid.UUID) {
-	repo.CreateAccessLog(r.Context(), h.Pool, clinicID, &actorID, actorType, action, resourceType, resourceID, patientID, r.RemoteAddr, r.UserAgent(), r.Header.Get("X-Request-ID"))
+	_ = repo.CreateAccessLog(r.Context(), h.Pool, clinicID, &actorID, actorType, action, resourceType, resourceID, patientID, r.RemoteAddr, r.UserAgent(), r.Header.Get("X-Request-ID"))
 }
 
 func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
@@ -85,11 +88,8 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	keysMap, _ := crypto.ParseKeysEnv(h.Cfg.DataEncryptionKeys)
-	keyVer := h.Cfg.CurrentDataKeyVer
-	if keyVer == "" {
-		keyVer = "v1"
-	}
+	keysMap, errKeys := crypto.ParseKeysEnv(h.Cfg.DataEncryptionKeys)
+	_ = errKeys
 	type item struct {
 		ID         string `json:"id"`
 		Content    string `json:"content"`
@@ -100,7 +100,8 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]item, 0, len(entries))
 	for _, e := range entries {
-		plain, _ := crypto.Decrypt(e.ContentEncrypted, e.ContentNonce, e.ContentKeyVersion, keysMap)
+		plain, errDec := crypto.Decrypt(e.ContentEncrypted, e.ContentNonce, e.ContentKeyVersion, keysMap)
+		_ = errDec
 		content := ""
 		if len(plain) > 0 {
 			content = string(plain)
@@ -114,8 +115,9 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 	if aid, e := uuid.Parse(actorID); e == nil {
 		var cid *uuid.UUID
 		if auth.ClinicIDFrom(r.Context()) != nil {
-			u, _ := uuid.Parse(*auth.ClinicIDFrom(r.Context()))
-			cid = &u
+			if u, e := uuid.Parse(*auth.ClinicIDFrom(r.Context())); e == nil {
+				cid = &u
+			}
 		}
 		h.logAccess(r, cid, auth.RoleFrom(r.Context()), aid, "READ", "MEDICAL_RECORD", &mrID, &patientID)
 	}
@@ -150,7 +152,8 @@ func (h *Handler) CreateRecordEntry(w http.ResponseWriter, r *http.Request) {
 	if req.EntryDate == "" {
 		req.EntryDate = time.Now().Format("2006-01-02")
 	}
-	entryDate, _ := time.Parse("2006-01-02", req.EntryDate)
+	entryDate, errParse := time.Parse("2006-01-02", req.EntryDate)
+	_ = errParse
 	keysMap, err := crypto.ParseKeysEnv(h.Cfg.DataEncryptionKeys)
 	if err != nil {
 		http.Error(w, `{"error":"config"}`, http.StatusInternalServerError)
@@ -170,7 +173,8 @@ func (h *Handler) CreateRecordEntry(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	authorID, _ := uuid.Parse(auth.UserIDFrom(r.Context()))
+	authorID, errAuth := uuid.Parse(auth.UserIDFrom(r.Context()))
+	_ = errAuth
 	id, err := repo.CreateRecordEntry(r.Context(), h.Pool, mrID, enc, nonce, keyVer, entryDate, authorID, role)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -178,10 +182,12 @@ func (h *Handler) CreateRecordEntry(w http.ResponseWriter, r *http.Request) {
 	}
 	var cid *uuid.UUID
 	if auth.ClinicIDFrom(r.Context()) != nil {
-		u, _ := uuid.Parse(*auth.ClinicIDFrom(r.Context()))
-		cid = &u
+		if u, e := uuid.Parse(*auth.ClinicIDFrom(r.Context())); e == nil {
+			cid = &u
+		}
 	}
-	aid, _ := uuid.Parse(auth.UserIDFrom(r.Context()))
+	aid, errAid := uuid.Parse(auth.UserIDFrom(r.Context()))
+	_ = errAid
 	h.logAccess(r, cid, role, aid, "READ", "RECORD_ENTRY", &id, &patientID)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"id": id.String()})

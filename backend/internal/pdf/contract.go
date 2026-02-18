@@ -100,7 +100,7 @@ func BuildContractPDF(bodyText string, block SignatureBlock) ([]byte, error) {
 		if err == nil {
 			tmpFile, err := os.CreateTemp("", "qr-*.png")
 			if err == nil {
-				tmpFile.Write(qrPNG)
+				_, _ = tmpFile.Write(qrPNG)
 				path := tmpFile.Name()
 				tmpFile.Close()
 				defer os.Remove(path)

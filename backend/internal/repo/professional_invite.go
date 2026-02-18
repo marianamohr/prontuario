@@ -66,7 +66,7 @@ func AcceptProfessionalInvite(ctx context.Context, pool *pgxpool.Pool, inviteID 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	var email, invFullName string
 	var clinicID uuid.UUID
