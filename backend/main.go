@@ -81,6 +81,7 @@ func main() {
 			FromName: cfg.SMTPFromName,
 			FromAddr: cfg.SMTPFromEmail,
 		}
+		mailCfg.LogConfigSummary()
 		h.SetSendPasswordResetEmail(func(to, token string) error {
 			resetURL := cfg.AppPublicURL + "/reset-password?token=" + token
 			return mailCfg.SendPasswordReset(to, resetURL)
@@ -106,12 +107,12 @@ func main() {
 			return mailCfg.SendContractEnded(to, fullName, endDate)
 		})
 		if cfg.SMTPUser == "" {
-			log.Printf("SMTP configurado: %s:%s (sem autenticação). E-mails em dev: veja no MailHog http://localhost:8025", cfg.SMTPHost, cfg.SMTPPort)
+			log.Printf("[email] SMTP configurado: %s:%s (sem autenticação). E-mails em dev: veja no MailHog http://localhost:8025", cfg.SMTPHost, cfg.SMTPPort)
 		} else {
-			log.Printf("SMTP configurado: %s:%s", cfg.SMTPHost, cfg.SMTPPort)
+			log.Printf("[email] SMTP configurado: %s:%s (autenticação ativa)", cfg.SMTPHost, cfg.SMTPPort)
 		}
 	} else {
-		log.Printf("SMTP não configurado (APP_PUBLIC_URL vazio). Envio de e-mail desativado.")
+		log.Printf("[email] Envio de e-mail desativado: APP_PUBLIC_URL vazio. Defina APP_PUBLIC_URL para habilitar convites, reset de senha e contratos por e-mail.")
 	}
 	apiRouter := r.PathPrefix("/api").Subrouter()
 	apiRouter.HandleFunc("/auth/login", h.Login).Methods(http.MethodPost)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -59,7 +60,12 @@ func (h *Handler) CreatePatientInvite(w http.ResponseWriter, r *http.Request) {
 
 	registerURL := h.Cfg.AppPublicURL + "/register-patient?token=" + inv.Token
 	if h.sendPatientInviteEmail != nil {
-		_ = h.sendPatientInviteEmail(req.Email, req.FullName, registerURL)
+		log.Printf("[patient-invite] enviando convite de paciente para %s", req.Email)
+		if err := h.sendPatientInviteEmail(req.Email, req.FullName, registerURL); err != nil {
+			log.Printf("[patient-invite] falha ao enviar e-mail para %s: %v", req.Email, err)
+		}
+	} else {
+		log.Printf("[patient-invite] envio desativado (destinatário seria %s)", req.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{

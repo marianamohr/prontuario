@@ -198,9 +198,11 @@ Usado para: convites (profissional e paciente), reset de senha, envio de link de
 
 **Mailtrap** e **SMTP2GO** são boas opções para começar: plano gratuito permanente, sem cartão, e foco em entregabilidade.
 
+**Quer só testar no início?** Use **Gmail** (Opção D): não exige domínio, você usa seu @gmail.com e uma “Senha de app”. Os e-mails chegam de verdade na sua caixa de entrada.
+
 **Ainda não tenho domínio?**  
-- **Mailtrap:** ao criar a conta, o Mailtrap fornece um **domínio de demonstração** (Demo domain). Use esse domínio em **Sending Domains** e defina `SMTP_FROM_EMAIL` com um endereço @ desse domínio (ex.: `noreply@seu-demo.mailtrap.io`). Assim você envia de verdade sem ter domínio próprio.  
-- **Gmail:** use a Opção D abaixo com seu e-mail @gmail.com e uma “Senha de app” — não exige domínio (bom para testes e baixo volume).
+- **Mailtrap:** domínio de demonstração em Sending Domains; defina `SMTP_FROM_EMAIL` com @ desse domínio.  
+- **Gmail:** Opção D abaixo — ideal para testar sem configurar outro serviço.
 
 ### Onde conseguir
 
@@ -228,10 +230,17 @@ Usado para: convites (profissional e paciente), reset de senha, envio de link de
    `SMTP_FROM_EMAIL=seu@email.com`  
    `SMTP_FROM_NAME=Nome do App`
 
-**Opção D – Gmail (não recomendado para produção)**  
-1. Ativar “Acesso a app menos seguro” ou usar “Senha de app” (conta Google).  
-2. Host: `smtp.gmail.com`, porta: `587`, usuário: seu e-mail, senha: senha de app.  
-3. Definir `SMTP_FROM_EMAIL` e `SMTP_FROM_NAME`.
+**Opção D – Gmail (bom para testar no início; não recomendado para produção)**  
+1. Conta Google: acesse [myaccount.google.com](https://myaccount.google.com) → **Segurança** → **Verificação em duas etapas** (ative se ainda não tiver).  
+2. **Senha de app:** em **Segurança** → **Senhas de app** (ou pesquise “Senhas de app” na conta Google), crie uma senha de app para “Mail” ou “Outro”. Copie a senha de 16 caracteres.  
+3. No `.env` (ou variáveis do backend):  
+   `SMTP_HOST=smtp.gmail.com`  
+   `SMTP_PORT=587`  
+   `SMTP_USER=seu.email@gmail.com`  
+   `SMTP_PASS=a_senha_de_16_caracteres_gerada`  
+   `SMTP_FROM_EMAIL=seu.email@gmail.com`  
+   `SMTP_FROM_NAME=Prontuário Saúde`  
+4. Os e-mails enviados pelo app saem do seu Gmail e chegam normalmente na caixa de entrada (e em “Enviados” do Gmail).
 
 **Opção E – Mailtrap (gratuito – 4.000/mês)**  
 

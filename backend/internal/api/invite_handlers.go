@@ -151,9 +151,12 @@ func (h *Handler) ResendInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	registerURL := h.Cfg.AppPublicURL + "/register?token=" + inv.Token
 	if h.sendInviteEmail != nil {
+		log.Printf("[invite] reenviando convite para %s", inv.Email)
 		if err := h.sendInviteEmail(inv.Email, inv.FullName, registerURL); err != nil {
 			log.Printf("[invite] falha ao reenviar e-mail para %s: %v", inv.Email, err)
 		}
+	} else {
+		log.Printf("[invite] reenvio desativado (destinatário seria %s); configure APP_PUBLIC_URL e SMTP", inv.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Convite reenviado por e-mail."})

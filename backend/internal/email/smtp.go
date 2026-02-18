@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net/smtp"
 	"strconv"
 	"text/template"
@@ -19,11 +20,25 @@ type Config struct {
 }
 
 func (c *Config) Send(to, subject, body string, html bool) error {
+	// Validação de config e destinatário
+	if to == "" {
+		log.Printf("[email] erro de config: destinatário (to) vazio")
+		return fmt.Errorf("destinatário de e-mail vazio")
+	}
+	if c.Host == "" {
+		log.Printf("[email] erro de config: SMTP host vazio (destinatário=%s)", to)
+		return fmt.Errorf("SMTP host não configurado")
+	}
+	if c.FromAddr == "" {
+		log.Printf("[email] erro de config: SMTP FromAddr vazio (destinatário=%s)", to)
+		return fmt.Errorf("SMTP remetente (From) não configurado")
+	}
 	port := c.Port
 	if port == 0 {
 		port = 25
 	}
 	addr := fmt.Sprintf("%s:%d", c.Host, port)
+	log.Printf("[email] enviando para %s assunto=%q via %s (from=%s)", to, subject, addr, c.FromAddr)
 	from := c.FromAddr
 	if c.FromName != "" {
 		from = fmt.Sprintf("%s <%s>", c.FromName, c.FromAddr)
@@ -43,7 +58,13 @@ func (c *Config) Send(to, subject, body string, html bool) error {
 	}
 	buf.WriteString("\r\n")
 	buf.WriteString(body)
-	return smtp.SendMail(addr, c.authForSend(), c.FromAddr, []string{to}, buf.Bytes())
+	err := smtp.SendMail(addr, c.authForSend(), c.FromAddr, []string{to}, buf.Bytes())
+	if err != nil {
+		log.Printf("[email] falha ao enviar para %s assunto=%q: %v", to, subject, err)
+		return err
+	}
+	log.Printf("[email] enviado com sucesso para %s assunto=%q", to, subject)
+	return nil
 }
 
 // authForSend returns nil when User is empty (e.g. MailHog), so no AUTH is sent.
@@ -55,6 +76,10 @@ func (c *Config) authForSend() smtp.Auth {
 }
 
 func (c *Config) SendPasswordReset(to, resetURL string) error {
+	if to == "" || resetURL == "" {
+		log.Printf("[email] SendPasswordReset: to ou resetURL vazio")
+		return fmt.Errorf("to ou resetURL vazio")
+	}
 	tpl := `Olá,
 
 Você solicitou a redefinição de senha. Clique no link abaixo (válido por 1 hora):
@@ -64,13 +89,27 @@ Você solicitou a redefinição de senha. Clique no link abaixo (válido por 1 h
 Se você não solicitou isso, ignore este e-mail.`
 	t, err := template.New("").Parse(tpl)
 	if err != nil {
+		log.Printf("[email] SendPasswordReset: erro ao parsear template: %v", err)
 		return err
 	}
 	var b bytes.Buffer
 	if err := t.Execute(&b, map[string]string{"ResetURL": resetURL}); err != nil {
+		log.Printf("[email] SendPasswordReset: erro ao executar template: %v", err)
 		return err
 	}
 	return c.Send(to, "Redefinição de senha - Prontuário Saúde", b.String(), false)
+}
+
+// LogConfigSummary loga um resumo da config SMTP (sem senha) para diagnóstico.
+func (c *Config) LogConfigSummary() {
+	auth := "não"
+	if c.User != "" {
+		auth = "sim (user=" + c.User + ")"
+	}
+	log.Printf("[email] config SMTP: host=%s port=%d from=%q auth=%s", c.Host, c.Port, c.FromAddr, auth)
+	if c.Host == "" || c.FromAddr == "" {
+		log.Printf("[email] aviso: host ou from vazio; envios podem falhar")
+	}
 }
 
 func (c *Config) SendContractToSign(to, fullName, signURL string) error {
@@ -176,6 +215,14 @@ func PortFromString(s string) int {
 }
 
 func (c *Config) SendWithAttachment(to, subject, body string, attachmentName string, attachmentPDF []byte) error {
+	if to == "" {
+		log.Printf("[email] erro de config: destinatário vazio (anexo)")
+		return fmt.Errorf("destinatário de e-mail vazio")
+	}
+	if c.Host == "" || c.FromAddr == "" {
+		log.Printf("[email] erro de config: host ou from vazio (destinatário=%s)", to)
+		return fmt.Errorf("SMTP host ou remetente não configurado")
+	}
 	port := c.Port
 	if port == 0 {
 		port = 25
@@ -203,5 +250,12 @@ func (c *Config) SendWithAttachment(to, subject, body string, attachmentName str
 	_, _ = b64.Write(attachmentPDF)
 	_ = b64.Close()
 	buf.WriteString("\r\n--" + boundary + "--\r\n")
-	return smtp.SendMail(addr, c.authForSend(), c.FromAddr, []string{to}, buf.Bytes())
+	log.Printf("[email] enviando com anexo para %s assunto=%q via %s", to, subject, addr)
+	err := smtp.SendMail(addr, c.authForSend(), c.FromAddr, []string{to}, buf.Bytes())
+	if err != nil {
+		log.Printf("[email] falha ao enviar anexo para %s assunto=%q: %v", to, subject, err)
+		return err
+	}
+	log.Printf("[email] enviado com anexo para %s assunto=%q", to, subject)
+	return nil
 }

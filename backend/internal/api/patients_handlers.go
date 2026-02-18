@@ -803,9 +803,12 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 	}
 	signURL := h.Cfg.AppPublicURL + "/sign-contract?token=" + accessToken
 	if h.sendContractToSignEmail != nil {
+		log.Printf("[send-contract] enviando link de assinatura para %s", guardian.Email)
 		if err := h.sendContractToSignEmail(guardian.Email, guardian.FullName, signURL); err != nil {
-			log.Printf("[send-contract] falha ao enviar e-mail para %s: %v (configure SMTP para receber o link)", guardian.Email, err)
+			log.Printf("[send-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
 		}
+	} else {
+		log.Printf("[send-contract] envio desativado (destinatário seria %s); configure APP_PUBLIC_URL e SMTP", guardian.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato enviado por e-mail.", "contract_id": contractID.String()})
@@ -1132,9 +1135,12 @@ func (h *Handler) ResendContract(w http.ResponseWriter, r *http.Request) {
 		signURL = h.Cfg.AppPublicURL + "/sign-contract?token=" + accessToken
 	}
 	if h.sendContractToSignEmail != nil {
+		log.Printf("[resend-contract] reenviando link de assinatura para %s", guardian.Email)
 		if err := h.sendContractToSignEmail(guardian.Email, guardian.FullName, signURL); err != nil {
 			log.Printf("[resend-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
 		}
+	} else {
+		log.Printf("[resend-contract] envio desativado (destinatário seria %s)", guardian.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato reenviado por e-mail."})
@@ -1264,9 +1270,12 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if h.sendContractCancelledEmail != nil {
+		log.Printf("[cancel-contract] enviando notificação de cancelamento para %s", guardian.Email)
 		if err := h.sendContractCancelledEmail(guardian.Email, guardian.FullName); err != nil {
 			log.Printf("[cancel-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
 		}
+	} else {
+		log.Printf("[cancel-contract] envio desativado (destinatário seria %s)", guardian.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	msg := "Contrato cancelado. O responsável foi notificado por e-mail."

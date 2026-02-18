@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -229,8 +230,14 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	guardianUUID := guardian.ID
 	_ = repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED", "LEGAL_GUARDIAN", &guardianUUID, map[string]string{"contract_id": c.ID.String(), "patient_id": c.PatientID.String()})
 	if h.sendContractSignedEmail != nil {
-		_ = h.sendContractSignedEmail(guardian.Email, guardian.FullName, pdfBytes, verificationToken)
-		_ = repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED_EMAIL_SENT", "SYSTEM", nil, map[string]string{"contract_id": c.ID.String(), "to": guardian.Email})
+		log.Printf("[email] enviando contrato assinado (PDF) para %s", guardian.Email)
+		if err := h.sendContractSignedEmail(guardian.Email, guardian.FullName, pdfBytes, verificationToken); err != nil {
+			log.Printf("[email] falha ao enviar contrato assinado para %s: %v", guardian.Email, err)
+		} else {
+			_ = repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED_EMAIL_SENT", "SYSTEM", nil, map[string]string{"contract_id": c.ID.String(), "to": guardian.Email})
+		}
+	} else {
+		log.Printf("[email] envio de contrato assinado desativado (destinatário seria %s)", guardian.Email)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

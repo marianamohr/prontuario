@@ -30,27 +30,42 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if prof, err := repo.ProfessionalByEmail(r.Context(), h.Pool, req.Email); err == nil {
 		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "PROFESSIONAL", prof.ID, exp)
 		_ = errTok
-		if tok != "" && h.sendPasswordResetEmail != nil {
-			if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
-				log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+		if tok != "" {
+			if h.sendPasswordResetEmail != nil {
+				log.Printf("[password-reset] enviando para %s (tipo=PROFESSIONAL)", req.Email)
+				if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
+					log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+				}
+			} else {
+				log.Printf("[password-reset] envio desativado (destinatário seria %s, tipo=PROFESSIONAL)", req.Email)
 			}
 		}
 	}
 	if admin, err := repo.SuperAdminByEmail(r.Context(), h.Pool, req.Email); err == nil {
 		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "SUPER_ADMIN", admin.ID, exp)
 		_ = errTok
-		if tok != "" && h.sendPasswordResetEmail != nil {
-			if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
-				log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+		if tok != "" {
+			if h.sendPasswordResetEmail != nil {
+				log.Printf("[password-reset] enviando para %s (tipo=SUPER_ADMIN)", req.Email)
+				if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
+					log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+				}
+			} else {
+				log.Printf("[password-reset] envio desativado (destinatário seria %s, tipo=SUPER_ADMIN)", req.Email)
 			}
 		}
 	}
 	if g, err := repo.LegalGuardianByEmail(r.Context(), h.Pool, req.Email); err == nil {
 		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "LEGAL_GUARDIAN", g.ID, exp)
 		_ = errTok
-		if tok != "" && h.sendPasswordResetEmail != nil {
-			if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
-				log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+		if tok != "" {
+			if h.sendPasswordResetEmail != nil {
+				log.Printf("[password-reset] enviando para %s (tipo=LEGAL_GUARDIAN)", req.Email)
+				if errSend := h.sendPasswordResetEmail(req.Email, tok); errSend != nil {
+					log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
+				}
+			} else {
+				log.Printf("[password-reset] envio desativado (destinatário seria %s, tipo=LEGAL_GUARDIAN)", req.Email)
 			}
 		}
 	}

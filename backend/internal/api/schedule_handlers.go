@@ -497,10 +497,15 @@ func (h *Handler) EndContract(w http.ResponseWriter, r *http.Request) {
 		guardian, errG := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
 		if errG == nil {
 			endDateStr := endDate.Format("02/01/2006")
+			log.Printf("[end-contract] enviando notificação de encerramento para %s", guardian.Email)
 			if err := h.sendContractEndedEmail(guardian.Email, guardian.FullName, endDateStr); err != nil {
 				log.Printf("[end-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
 			}
+		} else {
+			log.Printf("[end-contract] não foi possível obter responsável (legal_guardian_id=%s) para enviar e-mail: %v", c.LegalGuardianID, errG)
 		}
+	} else {
+		log.Printf("[end-contract] envio desativado (contrato encerrado)")
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Contrato encerrado. Agendamentos a partir da data foram finalizados. O responsável foi notificado por e-mail."})
