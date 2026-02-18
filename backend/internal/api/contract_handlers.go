@@ -152,7 +152,10 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	_ = errRules
 	consultasPrevistas := FormatScheduleRulesText(rules)
 	// Data/hora real da assinatura no fuso do Brasil (para o bloco de assinatura eletrônica no PDF)
-	locBR, _ := time.LoadLocation("America/Sao_Paulo")
+	locBR, errLoc := time.LoadLocation("America/Sao_Paulo")
+	if errLoc != nil {
+		locBR = time.UTC
+	}
 	nowBR := time.Now().In(locBR)
 	signedAtReal := nowBR.Format("02/01/2006 15:04:05")
 	// Apenas [DATA] no corpo: data do dia da assinatura (DD/MM/AAAA). Local já vem no template.
