@@ -1,6 +1,4 @@
-# Configuração mínima para CI. Ajuste linters conforme necessidade.
-# yaml-language-server: $schema=https://golangci-lint.run/jsonschema/golangci.jsonschema.json
-version: "2"
+# Configuração mínima para CI (golangci-lint v1). Ajuste linters conforme necessidade.
 run:
   timeout: 5m
   modules-download-mode: readonly
@@ -14,7 +12,8 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-  settings:
-    errcheck:
-      check-type-assertions: true
-      check-blank: false  # permite _ = para ignorar erro explicitamente (ex.: respostas HTTP já enviadas, audit best-effort)
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: false  # permite _ = para ignorar erro explicitamente (ex.: respostas HTTP já enviadas, audit best-effort)
