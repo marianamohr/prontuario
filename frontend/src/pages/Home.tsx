@@ -18,9 +18,6 @@ function formatTime(t: string): string {
 
 export function Home() {
   const { user, isImpersonated } = useAuth()
-  if (user?.role === 'SUPER_ADMIN' && !isImpersonated) {
-    return <Navigate to="/backoffice/audit" replace />
-  }
   const branding = useBranding()?.branding ?? null
   const isProfessional = user?.role === 'PROFESSIONAL'
   const primaryColor = isProfessional && branding?.primary_color ? branding?.primary_color : undefined
@@ -54,6 +51,10 @@ export function Home() {
   }, [load])
 
   const canShowContent = user?.role === 'PROFESSIONAL' || user?.role === 'SUPER_ADMIN'
+
+  if (user?.role === 'SUPER_ADMIN' && !isImpersonated) {
+    return <Navigate to="/backoffice/audit" replace />
+  }
 
   return (
     <PageContainer>

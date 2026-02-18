@@ -141,7 +141,7 @@ export function Agenda() {
         })
         .catch(() => setContractsForAgenda([]))
     }
-  }, [createModalOpen])
+  }, [createModalOpen, selectedContractId])
 
   const handleOpenCreateModal = () => {
     setCreateMessage('')

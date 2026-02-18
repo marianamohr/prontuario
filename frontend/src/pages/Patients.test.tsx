@@ -16,13 +16,13 @@ vi.mock('../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../lib/api')>('../lib/api')
   return {
     ...actual,
-    listPatients: (...args: any[]) => listPatients(...args),
-    createPatient: (...args: any[]) => createPatient(...args),
-    createPatientInvite: (...args: any[]) => createPatientInvite(...args),
-    softDeletePatient: (...args: any[]) => softDeletePatient(...args),
-    getPatient: (...args: any[]) => getPatient(...args),
-    updatePatient: (...args: any[]) => updatePatient(...args),
-    softDeleteGuardian: (...args: any[]) => softDeleteGuardian(...args),
+    listPatients: (...args: unknown[]) => listPatients(...args),
+    createPatient: (...args: unknown[]) => createPatient(...args),
+    createPatientInvite: (...args: unknown[]) => createPatientInvite(...args),
+    softDeletePatient: (...args: unknown[]) => softDeletePatient(...args),
+    getPatient: (...args: unknown[]) => getPatient(...args),
+    updatePatient: (...args: unknown[]) => updatePatient(...args),
+    softDeleteGuardian: (...args: unknown[]) => softDeleteGuardian(...args),
   }
 })
 

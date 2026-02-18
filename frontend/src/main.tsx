@@ -5,11 +5,19 @@ import App from './App'
 import { ThemeSettingsProvider } from './contexts/ThemeSettingsContext'
 import './index.css'
 
+type FrontendErrorPayload = {
+  severity: string
+  kind: string
+  message: string
+  stack?: string
+  metadata?: Record<string, unknown>
+}
+
 function setupGlobalFrontendErrorHandlers() {
   try {
-    const BASE = (import.meta as any)?.env?.VITE_API_URL ? String((import.meta as any).env.VITE_API_URL).replace(/\/$/, '') : ''
+    const BASE = import.meta.env?.VITE_API_URL ? String(import.meta.env.VITE_API_URL).replace(/\/$/, '') : ''
     if (!BASE) return
-    const post = (payload: any) => {
+    const post = (payload: FrontendErrorPayload) => {
       try {
         const token = localStorage.getItem('token')
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -19,21 +27,21 @@ function setupGlobalFrontendErrorHandlers() {
         // no-op
       }
     }
-    window.addEventListener('error', (e) => {
+    window.addEventListener('error', (e: ErrorEvent) => {
       post({
         severity: 'ERROR',
         kind: 'WINDOW_ERROR',
-        message: String((e as any)?.message || 'window error'),
-        stack: (e as any)?.error?.stack,
-        metadata: { filename: (e as any)?.filename, lineno: (e as any)?.lineno, colno: (e as any)?.colno },
+        message: String(e?.message || 'window error'),
+        stack: e?.error?.stack,
+        metadata: { filename: e?.filename, lineno: e?.lineno, colno: e?.colno },
       })
     })
-    window.addEventListener('unhandledrejection', (e) => {
-      const reason = (e as any)?.reason
+    window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
+      const reason = e?.reason as Error | undefined
       post({
         severity: 'ERROR',
         kind: 'UNHANDLED_REJECTION',
-        message: String(reason?.message || reason || 'unhandled rejection'),
+        message: String(reason?.message ?? reason ?? 'unhandled rejection'),
         stack: reason?.stack,
       })
     })

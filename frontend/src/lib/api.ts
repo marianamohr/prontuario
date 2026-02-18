@@ -82,7 +82,7 @@ export async function api<T>(
   }
   if (!res.ok) {
     const t = await res.text()
-    let err: Error & { status?: number } = new Error(t || res.statusText)
+    const err: Error & { status?: number } = new Error(t || res.statusText)
     err.status = res.status
     const severity: 'WARN' | 'ERROR' = res.status >= 500 ? 'ERROR' : 'WARN'
     postFrontendError({
@@ -568,7 +568,7 @@ export type BackofficeTimelineItem = {
   impersonation_session_id?: string | null
   source: string
   severity: string
-  metadata?: any
+  metadata?: Record<string, unknown>
   created_at: string
 }
 
@@ -610,7 +610,7 @@ export type BackofficeErrorItem = {
   stack?: string | null
   pg_code?: string | null
   pg_message?: string | null
-  metadata?: any
+  metadata?: Record<string, unknown>
 }
 
 export function listBackofficeErrors(params: {
