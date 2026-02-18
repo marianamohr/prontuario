@@ -180,6 +180,7 @@ func main() {
 	protected.Handle("/backoffice/professionals/{id}/related", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.BackofficeProfessionalRelatedData))).Methods(http.MethodGet)
 	protected.Handle("/backoffice/timeline", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.BackofficeTimeline))).Methods(http.MethodGet)
 	protected.Handle("/backoffice/errors", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.BackofficeErrors))).Methods(http.MethodGet)
+	protected.Handle("/backoffice/cleanup-orphan-addresses", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.CleanupOrphanAddresses))).Methods(http.MethodPost)
 	protected.Handle("/backoffice/invites", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.CreateInvite))).Methods(http.MethodPost)
 	protected.Handle("/backoffice/impersonate/start", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ImpersonateStart))).Methods(http.MethodPost)
 	protected.HandleFunc("/backoffice/impersonate/end", h.ImpersonateEnd).Methods(http.MethodPost)

@@ -437,6 +437,13 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
+	var addressObj map[string]interface{}
+	if p.AddressID != nil {
+		addr, err := repo.GetAddressByID(r.Context(), h.Pool, *p.AddressID)
+		if err == nil {
+			addressObj = addressToMap(addr)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":             p.ID.String(),
@@ -444,7 +451,7 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		"full_name":      p.FullName,
 		"trade_name":     p.TradeName,
 		"birth_date":     p.BirthDate,
-		"address":        p.Address,
+		"address":        addressObj,
 		"marital_status": p.MaritalStatus,
 	})
 }
@@ -467,11 +474,11 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		FullName      string  `json:"full_name"`
-		TradeName     *string `json:"trade_name"`
-		BirthDate     *string `json:"birth_date"`
-		Address       *string `json:"address"`
-		MaritalStatus *string `json:"marital_status"`
+		FullName      string      `json:"full_name"`
+		TradeName     *string     `json:"trade_name"`
+		BirthDate     *string     `json:"birth_date"`
+		Address       interface{} `json:"address"` // objeto (8 campos) ou string (8 linhas); se omitido mantém atual
+		MaritalStatus *string     `json:"marital_status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
@@ -487,7 +494,26 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 		t := strings.TrimSpace(*req.TradeName)
 		tradeName = &t
 	}
-	if err := repo.UpdateProfessionalProfile(r.Context(), h.Pool, profID, fullName, tradeName, req.BirthDate, req.Address, req.MaritalStatus); err != nil {
+	var addressID *uuid.UUID
+	if req.Address != nil {
+		addrInput, err := parseAddressFromRequest(req.Address)
+		if err != nil {
+			http.Error(w, `{"error":"endereço inválido: use objeto com 8 campos ou string de 8 linhas"}`, http.StatusBadRequest)
+			return
+		}
+		if err := ValidateAddress(addrInput); err != nil {
+			http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+			return
+		}
+		addr := AddressInputToRepo(addrInput)
+		id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+		if err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		addressID = &id
+	}
+	if err := repo.UpdateProfessionalProfile(r.Context(), h.Pool, profID, fullName, tradeName, req.BirthDate, addressID, req.MaritalStatus); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return

@@ -91,14 +91,14 @@ func (h *Handler) GetInviteByToken(w http.ResponseWriter, r *http.Request) {
 }
 
 type AcceptInviteRequest struct {
-	Token         string  `json:"token"`
-	Password      string  `json:"password"`
-	FullName      string  `json:"full_name"`
-	TradeName     string  `json:"trade_name"`
-	BirthDate     *string `json:"birth_date"`
-	CPF           string  `json:"cpf"`
-	Address       string  `json:"address"`
-	MaritalStatus string  `json:"marital_status"`
+	Token         string      `json:"token"`
+	Password      string      `json:"password"`
+	FullName      string      `json:"full_name"`
+	TradeName     string      `json:"trade_name"`
+	BirthDate     *string     `json:"birth_date"`
+	CPF           string      `json:"cpf"`
+	Address       interface{} `json:"address"` // objeto (8 campos) ou string (8 linhas) — obrigatório
+	MaritalStatus string      `json:"marital_status"`
 }
 
 func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +113,15 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.CPF == "" {
 		http.Error(w, `{"error":"cpf obrigatorio"}`, http.StatusBadRequest)
+		return
+	}
+	addrInput, err := parseAddressFromRequest(req.Address)
+	if err != nil {
+		http.Error(w, `{"error":"endereço obrigatório: use objeto com 8 campos ou string de 8 linhas (rua, numero, complemento, bairro, cidade, estado, pais, cep)"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateAddress(addrInput); err != nil {
+		http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
 		return
 	}
 	inv, err := repo.GetProfessionalInviteByToken(r.Context(), h.Pool, req.Token)
@@ -151,14 +160,17 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"encryption"}`, http.StatusInternalServerError)
 		return
 	}
-	var address, maritalStatus *string
-	if req.Address != "" {
-		address = &req.Address
+	addr := AddressInputToRepo(addrInput)
+	addressID, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
 	}
+	var maritalStatus *string
 	if req.MaritalStatus != "" {
 		maritalStatus = &req.MaritalStatus
 	}
-	if err := repo.AcceptProfessionalInvite(r.Context(), h.Pool, inv.ID, passwordHash, req.FullName, tradeName, req.BirthDate, cpfEnc, nonce, &keyVer, cpfHash, address, maritalStatus); err != nil {
+	if err := repo.AcceptProfessionalInvite(r.Context(), h.Pool, inv.ID, passwordHash, req.FullName, tradeName, req.BirthDate, cpfEnc, nonce, &keyVer, cpfHash, &addressID, maritalStatus); err != nil {
 		http.Error(w, `{"error":"could not complete registration"}`, http.StatusBadRequest)
 		return
 	}

@@ -33,7 +33,7 @@ type ProfessionalAdminView struct {
 	CPFEncrypted       []byte
 	CPFNonce           []byte
 	CPFKeyVersion      *string
-	Address            *string
+	AddressID          *uuid.UUID
 	MaritalStatus      *string
 }
 
@@ -72,38 +72,39 @@ type ProfessionalProfile struct {
 	FullName      string
 	TradeName     *string
 	BirthDate     *string
-	Address       *string
+	AddressID     *uuid.UUID
 	MaritalStatus *string
 }
 
 func ProfessionalProfileByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*ProfessionalProfile, error) {
 	var p ProfessionalProfile
-	var tradeName, birthDate, address, maritalStatus *string
+	var tradeName, birthDate, maritalStatus *string
+	var addrID *uuid.UUID
 	err := pool.QueryRow(ctx, `
-		SELECT id, clinic_id, email, full_name, trade_name, birth_date::text, address, marital_status
+		SELECT id, clinic_id, email, full_name, trade_name, birth_date::text, address_id, marital_status
 		FROM professionals WHERE id = $1
-	`, id).Scan(&p.ID, &p.ClinicID, &p.Email, &p.FullName, &tradeName, &birthDate, &address, &maritalStatus)
+	`, id).Scan(&p.ID, &p.ClinicID, &p.Email, &p.FullName, &tradeName, &birthDate, &addrID, &maritalStatus)
 	if err != nil {
 		return nil, err
 	}
 	p.TradeName = tradeName
 	p.BirthDate = birthDate
-	p.Address = address
+	p.AddressID = addrID
 	p.MaritalStatus = maritalStatus
 	return &p, nil
 }
 
-func UpdateProfessionalProfile(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, fullName string, tradeName *string, birthDate *string, address *string, maritalStatus *string) error {
+func UpdateProfessionalProfile(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, fullName string, tradeName *string, birthDate *string, addressID *uuid.UUID, maritalStatus *string) error {
 	result, err := pool.Exec(ctx, `
 		UPDATE professionals
 		SET full_name = $1,
 		    trade_name = CASE WHEN $2::text IS NULL THEN NULL ELSE NULLIF($2::text, '') END,
 		    birth_date = CASE WHEN $3::text IS NULL THEN birth_date ELSE NULLIF($3::text, '')::date END,
-		    address = CASE WHEN $4::text IS NULL THEN address ELSE NULLIF($4::text, '') END,
+		    address_id = $4,
 		    marital_status = CASE WHEN $5::text IS NULL THEN marital_status ELSE NULLIF($5::text, '') END,
 		    updated_at = now()
 		WHERE id = $6
-	`, fullName, tradeName, birthDate, address, maritalStatus, id)
+	`, fullName, tradeName, birthDate, addressID, maritalStatus, id)
 	if err != nil {
 		return err
 	}
@@ -116,12 +117,13 @@ func UpdateProfessionalProfile(ctx context.Context, pool *pgxpool.Pool, id uuid.
 func ProfessionalAdminByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*ProfessionalAdminView, error) {
 	var p ProfessionalAdminView
 	var sig *string
-	var tradeName, birth, cpfHash, addr, marital *string
+	var tradeName, birth, cpfHash, marital *string
+	var addrID *uuid.UUID
 	err := pool.QueryRow(ctx, `
 		SELECT id, clinic_id, email, full_name, trade_name, status, signature_image_data,
-		       birth_date::text, cpf_hash, cpf_encrypted, cpf_nonce, cpf_key_version, address, marital_status
+		       birth_date::text, cpf_hash, cpf_encrypted, cpf_nonce, cpf_key_version, address_id, marital_status
 		FROM professionals WHERE id = $1
-	`, id).Scan(&p.ID, &p.ClinicID, &p.Email, &p.FullName, &tradeName, &p.Status, &sig, &birth, &cpfHash, &p.CPFEncrypted, &p.CPFNonce, &p.CPFKeyVersion, &addr, &marital)
+	`, id).Scan(&p.ID, &p.ClinicID, &p.Email, &p.FullName, &tradeName, &p.Status, &sig, &birth, &cpfHash, &p.CPFEncrypted, &p.CPFNonce, &p.CPFKeyVersion, &addrID, &marital)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +131,7 @@ func ProfessionalAdminByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID
 	p.TradeName = tradeName
 	p.BirthDate = birth
 	p.CPFHash = cpfHash
-	p.Address = addr
+	p.AddressID = addrID
 	p.MaritalStatus = marital
 	return &p, nil
 }
@@ -140,7 +142,7 @@ func UpdateProfessionalSignature(ctx context.Context, pool *pgxpool.Pool, profes
 }
 
 // UpdateProfessionalAdmin atualiza dados do profissional (backoffice).
-// Campos opcionais: se nil, mantém. Para campos text opcionais, "" limpa (vira NULL).
+// Campos opcionais: se nil, mantém. addressID é UUID do endereço em addresses.
 func UpdateProfessionalAdmin(
 	ctx context.Context,
 	pool *pgxpool.Pool,
@@ -150,7 +152,7 @@ func UpdateProfessionalAdmin(
 	clinicID *uuid.UUID,
 	status *string,
 	birthDate *string,
-	address *string,
+	addressID *uuid.UUID,
 	maritalStatus *string,
 	cpfHash *string,
 	cpfEncrypted []byte,
@@ -168,7 +170,7 @@ func UpdateProfessionalAdmin(
 			clinic_id = COALESCE($4, clinic_id),
 			status = COALESCE($5, status),
 			birth_date = CASE WHEN $6::text IS NULL THEN birth_date ELSE NULLIF($6::text, '')::date END,
-			address = CASE WHEN $7::text IS NULL THEN address ELSE NULLIF($7::text, '') END,
+			address_id = COALESCE($7, address_id),
 			marital_status = CASE WHEN $8::text IS NULL THEN marital_status ELSE NULLIF($8::text, '') END,
 			cpf_hash = CASE WHEN $9::text IS NULL THEN cpf_hash ELSE NULLIF($9::text, '') END,
 			cpf_encrypted = CASE WHEN $10::bytea IS NULL THEN cpf_encrypted ELSE $10 END,
@@ -178,7 +180,7 @@ func UpdateProfessionalAdmin(
 			signature_image_data = CASE WHEN $14::text IS NULL THEN signature_image_data ELSE NULLIF($14::text, '') END,
 			updated_at = now()
 		WHERE id = $15
-	`, email, fullName, tradeName, clinicID, status, birthDate, address, maritalStatus, cpfHash, cpfEncrypted, cpfNonce, cpfKeyVersion, passwordHash, signatureImageData, id)
+	`, email, fullName, tradeName, clinicID, status, birthDate, addressID, maritalStatus, cpfHash, cpfEncrypted, cpfNonce, cpfKeyVersion, passwordHash, signatureImageData, id)
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,7 @@ type LegalGuardian struct {
 	CPFNonce      []byte
 	CPFKeyVersion *string
 	CPFHash       *string
-	Address       *string
+	AddressID     *uuid.UUID
 	BirthDate     *string
 	Phone         *string // E.164 para WhatsApp
 	AuthProvider  string
@@ -28,13 +28,14 @@ type LegalGuardian struct {
 func LegalGuardianByEmail(ctx context.Context, pool *pgxpool.Pool, email string) (*LegalGuardian, error) {
 	var g LegalGuardian
 	var googleSub, passHash, cpfKeyVer, cpfHash *string
-	var addr, birth, phone *string
+	var addrID *uuid.UUID
+	var birth, phone *string
 	err := pool.QueryRow(ctx, `
 		SELECT id, email, google_sub, password_hash, full_name,
-		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address, birth_date::text, phone, auth_provider::text, status
+		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, birth_date::text, phone, auth_provider::text, status
 		FROM legal_guardians WHERE email = $1 AND status != 'CANCELLED' AND deleted_at IS NULL
 	`, email).Scan(&g.ID, &g.Email, &googleSub, &passHash, &g.FullName,
-		&g.CPFEncrypted, &g.CPFNonce, &cpfKeyVer, &cpfHash, &addr, &birth, &phone, &g.AuthProvider, &g.Status)
+		&g.CPFEncrypted, &g.CPFNonce, &cpfKeyVer, &cpfHash, &addrID, &birth, &phone, &g.AuthProvider, &g.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +43,7 @@ func LegalGuardianByEmail(ctx context.Context, pool *pgxpool.Pool, email string)
 	g.PasswordHash = passHash
 	g.CPFKeyVersion = cpfKeyVer
 	g.CPFHash = cpfHash
-	g.Address = addr
+	g.AddressID = addrID
 	g.BirthDate = birth
 	g.Phone = phone
 	return &g, nil
@@ -51,13 +52,14 @@ func LegalGuardianByEmail(ctx context.Context, pool *pgxpool.Pool, email string)
 func LegalGuardianByGoogleSub(ctx context.Context, pool *pgxpool.Pool, sub string) (*LegalGuardian, error) {
 	var g LegalGuardian
 	var googleSub, passHash, cpfKeyVer, cpfHash *string
-	var addr, birth, phone *string
+	var addrID *uuid.UUID
+	var birth, phone *string
 	err := pool.QueryRow(ctx, `
 		SELECT id, email, google_sub, password_hash, full_name,
-		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address, birth_date::text, phone, auth_provider::text, status
+		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, birth_date::text, phone, auth_provider::text, status
 		FROM legal_guardians WHERE google_sub = $1 AND status != 'CANCELLED' AND deleted_at IS NULL
 	`, sub).Scan(&g.ID, &g.Email, &googleSub, &passHash, &g.FullName,
-		&g.CPFEncrypted, &g.CPFNonce, &cpfKeyVer, &cpfHash, &addr, &birth, &phone, &g.AuthProvider, &g.Status)
+		&g.CPFEncrypted, &g.CPFNonce, &cpfKeyVer, &cpfHash, &addrID, &birth, &phone, &g.AuthProvider, &g.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +67,7 @@ func LegalGuardianByGoogleSub(ctx context.Context, pool *pgxpool.Pool, sub strin
 	g.PasswordHash = passHash
 	g.CPFKeyVersion = cpfKeyVer
 	g.CPFHash = cpfHash
-	g.Address = addr
+	g.AddressID = addrID
 	g.BirthDate = birth
 	g.Phone = phone
 	return &g, nil
@@ -74,13 +76,14 @@ func LegalGuardianByGoogleSub(ctx context.Context, pool *pgxpool.Pool, sub strin
 func LegalGuardianByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*LegalGuardian, error) {
 	var g LegalGuardian
 	var googleSub, passHash, cpfKeyVer, cpfHash *string
-	var addr, birth, phone *string
+	var addrID *uuid.UUID
+	var birth, phone *string
 	err := pool.QueryRow(ctx, `
 		SELECT id, email, google_sub, password_hash, full_name,
-		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address, birth_date::text, phone, auth_provider::text, status
+		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, birth_date::text, phone, auth_provider::text, status
 		FROM legal_guardians WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&g.ID, &g.Email, &googleSub, &passHash, &g.FullName,
-		&g.CPFEncrypted, &g.CPFNonce, &cpfKeyVer, &cpfHash, &addr, &birth, &phone, &g.AuthProvider, &g.Status)
+		&g.CPFEncrypted, &g.CPFNonce, &cpfKeyVer, &cpfHash, &addrID, &birth, &phone, &g.AuthProvider, &g.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +91,7 @@ func LegalGuardianByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*
 	g.PasswordHash = passHash
 	g.CPFKeyVersion = cpfKeyVer
 	g.CPFHash = cpfHash
-	g.Address = addr
+	g.AddressID = addrID
 	g.BirthDate = birth
 	g.Phone = phone
 	return &g, nil
@@ -96,10 +99,10 @@ func LegalGuardianByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*
 
 func CreateLegalGuardian(ctx context.Context, pool *pgxpool.Pool, g *LegalGuardian) error {
 	return pool.QueryRow(ctx, `
-		INSERT INTO legal_guardians (email, google_sub, password_hash, full_name, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address, birth_date, phone, auth_provider, status)
+		INSERT INTO legal_guardians (email, google_sub, password_hash, full_name, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, birth_date, phone, auth_provider, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::auth_provider_enum, $13)
 		RETURNING id
-	`, g.Email, g.GoogleSub, g.PasswordHash, g.FullName, g.CPFEncrypted, g.CPFNonce, g.CPFKeyVersion, g.CPFHash, g.Address, g.BirthDate, g.Phone, g.AuthProvider, g.Status).Scan(&g.ID)
+	`, g.Email, g.GoogleSub, g.PasswordHash, g.FullName, g.CPFEncrypted, g.CPFNonce, g.CPFKeyVersion, g.CPFHash, g.AddressID, g.BirthDate, g.Phone, g.AuthProvider, g.Status).Scan(&g.ID)
 }
 
 func UpdateLegalGuardianCPF(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, cpfEncrypted, cpfNonce []byte, cpfKeyVersion string, cpfHash string) error {
@@ -153,12 +156,12 @@ func GuardiansByPatient(ctx context.Context, pool *pgxpool.Pool, patientID uuid.
 	return list, rows.Err()
 }
 
-// UpdateLegalGuardian atualiza full_name, email, address, birth_date, phone. Se cpfHash != nil, atualiza cpf_hash.
-func UpdateLegalGuardian(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, fullName, email string, address, birthDate, phone *string, cpfHash *string) error {
+// UpdateLegalGuardian atualiza full_name, email, address_id, birth_date, phone. Se cpfHash != nil, atualiza cpf_hash.
+func UpdateLegalGuardian(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, fullName, email string, addressID *uuid.UUID, birthDate, phone *string, cpfHash *string) error {
 	result, err := pool.Exec(ctx, `
-		UPDATE legal_guardians SET full_name = $1, email = $2, address = $3, birth_date = $4, phone = COALESCE($5, phone), cpf_hash = COALESCE($6, cpf_hash), updated_at = now()
+		UPDATE legal_guardians SET full_name = $1, email = $2, address_id = $3, birth_date = $4, phone = COALESCE($5, phone), cpf_hash = COALESCE($6, cpf_hash), updated_at = now()
 		WHERE id = $7
-	`, fullName, email, address, birthDate, phone, cpfHash, id)
+	`, fullName, email, addressID, birthDate, phone, cpfHash, id)
 	if err != nil {
 		return err
 	}
@@ -169,14 +172,14 @@ func UpdateLegalGuardian(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, 
 }
 
 // UpdateLegalGuardianAdmin atualiza cadastro do responsável legal (backoffice).
-// Campos opcionais: se nil, mantém. Para campos text opcionais, "" limpa (vira NULL).
+// Campos opcionais: se nil, mantém. addressID é UUID do endereço em addresses.
 func UpdateLegalGuardianAdmin(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	id uuid.UUID,
 	fullName *string,
 	email *string,
-	address *string,
+	addressID *uuid.UUID,
 	birthDate *string,
 	phone *string,
 	status *string,
@@ -192,7 +195,7 @@ func UpdateLegalGuardianAdmin(
 		SET
 			full_name = COALESCE($1, full_name),
 			email = COALESCE($2, email),
-			address = CASE WHEN $3::text IS NULL THEN address ELSE NULLIF($3::text, '') END,
+			address_id = COALESCE($3, address_id),
 			birth_date = CASE WHEN $4::text IS NULL THEN birth_date ELSE NULLIF($4::text, '')::date END,
 			phone = CASE WHEN $5::text IS NULL THEN phone ELSE NULLIF($5::text, '') END,
 			status = COALESCE($6, status),
@@ -204,7 +207,7 @@ func UpdateLegalGuardianAdmin(
 			cpf_hash = CASE WHEN $12::text IS NULL THEN cpf_hash ELSE $12::text END,
 			updated_at = now()
 		WHERE id = $13 AND deleted_at IS NULL
-	`, fullName, email, address, birthDate, phone, status, passwordHash, authProvider, cpfEncrypted, cpfNonce, cpfKeyVersion, cpfHash, id)
+	`, fullName, email, addressID, birthDate, phone, status, passwordHash, authProvider, cpfEncrypted, cpfNonce, cpfKeyVersion, cpfHash, id)
 	if err != nil {
 		return err
 	}

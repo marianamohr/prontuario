@@ -4,9 +4,27 @@ import { Alert, Box, Button, Checkbox, FormControlLabel, Paper, TextField, Typog
 import * as api from '../lib/api'
 import { isValidCPF } from '../lib/cpf'
 
-/** Junta os 6 campos de endereço em uma única string (separador: newline). */
-function buildAddress(rua: string, bairro: string, cidade: string, estado: string, pais: string, cep: string): string {
-  return [rua, bairro, cidade, estado, pais, cep].join('\n')
+/** Monta objeto de endereço (8 campos) para a API. */
+function buildAddressObject(
+  street: string,
+  number: string,
+  complement: string,
+  neighborhood: string,
+  city: string,
+  state: string,
+  country: string,
+  zip: string
+): api.Address {
+  return {
+    street: street.trim(),
+    number: number.trim() || undefined,
+    complement: complement.trim() || undefined,
+    neighborhood: neighborhood.trim(),
+    city: city.trim(),
+    state: state.trim(),
+    country: country.trim(),
+    zip: zip.replace(/\D/g, ''),
+  }
 }
 
 export function RegisterPatient() {
@@ -27,6 +45,8 @@ export function RegisterPatient() {
   const [patientBirthDate, setPatientBirthDate] = useState('')
 
   const [rua, setRua] = useState('')
+  const [numero, setNumero] = useState('')
+  const [complemento, setComplemento] = useState('')
   const [bairro, setBairro] = useState('')
   const [cidade, setCidade] = useState('')
   const [estado, setEstado] = useState('')
@@ -47,9 +67,10 @@ export function RegisterPatient() {
       .finally(() => setLoading(false))
   }, [token])
 
-  const addressString = useMemo(() => buildAddress(rua.trim(), bairro.trim(), cidade.trim(), estado.trim(), pais.trim(), cep.replace(/\D/g, '')), [
-    rua, bairro, cidade, estado, pais, cep,
-  ])
+  const guardianAddress = useMemo(
+    () => buildAddressObject(rua, numero, complemento, bairro, cidade, estado, pais, cep),
+    [rua, numero, complemento, bairro, cidade, estado, pais, cep]
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,7 +88,7 @@ export function RegisterPatient() {
       return
     }
     if (!rua.trim() || !bairro.trim() || !cidade.trim() || !estado.trim() || !pais.trim() || !cep.trim()) {
-      setError('Preencha o endereço completo: Rua, Bairro, Cidade, Estado, País e CEP.')
+      setError('Preencha o endereço: Rua, Bairro, Cidade, Estado, País e CEP.')
       return
     }
     const cepDigits = cep.replace(/\D/g, '')
@@ -91,7 +112,7 @@ export function RegisterPatient() {
         same_person: samePerson,
         guardian_full_name: guardianFullName.trim(),
         guardian_cpf: guardianCPF.trim(),
-        guardian_address: addressString,
+        guardian_address: guardianAddress,
         guardian_birth_date: guardianBirthDate.trim(),
         patient_full_name: samePerson ? '' : patientFullName.trim(),
         patient_birth_date: patientBirthDate.trim(),
@@ -181,6 +202,8 @@ export function RegisterPatient() {
 
           <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 0.5 }}>Endereço</Typography>
           <TextField label="Rua" value={rua} onChange={(e) => setRua(e.target.value)} required fullWidth />
+          <TextField label="Número" value={numero} onChange={(e) => setNumero(e.target.value)} fullWidth />
+          <TextField label="Complemento" value={complemento} onChange={(e) => setComplemento(e.target.value)} fullWidth />
           <TextField label="Bairro" value={bairro} onChange={(e) => setBairro(e.target.value)} required fullWidth />
           <TextField label="Cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} required fullWidth />
           <TextField label="Estado" value={estado} onChange={(e) => setEstado(e.target.value)} required placeholder="UF" inputProps={{ maxLength: 2 }} fullWidth />

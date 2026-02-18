@@ -40,7 +40,8 @@ func BuildGuardianSignatureHTML(guardianName, fontKey string) string {
 // O local deve estar escrito no template (não há substituição de [LOCAL]). dataAssinatura: para [DATA] (ex.: "11/02/2025").
 // guardianSignatureHTML: se vazio, [ASSINATURA_RESPONSAVEL] não é substituído; senão usa esse HTML.
 // consultasPrevistas: texto com os horários pré-agendados.
-func FillContractBody(body string, patient *repo.Patient, guardian *repo.LegalGuardian, contratado, objeto string, tipoServico, periodicidade, valor string, signatureImageData *string, professionalName *string, dataInicio, dataFim string, guardianSignatureHTML string, consultasPrevistas string, local, dataAssinatura string) string {
+// guardianAddress: endereço formatado do responsável (ex.: FormatAddressToLines(addr)); preenchido pelo chamador a partir de guardian.AddressID.
+func FillContractBody(body string, patient *repo.Patient, guardian *repo.LegalGuardian, contratado, objeto string, tipoServico, periodicidade, valor string, signatureImageData *string, professionalName *string, dataInicio, dataFim string, guardianSignatureHTML string, consultasPrevistas string, local, dataAssinatura string, guardianAddress string) string {
 	patientName := ""
 	patientBirth := ""
 	if patient != nil {
@@ -50,13 +51,10 @@ func FillContractBody(body string, patient *repo.Patient, guardian *repo.LegalGu
 		}
 	}
 	guardianName := ""
-	guardianAddr := ""
+	guardianAddr := guardianAddress
 	guardianBirth := ""
 	if guardian != nil {
 		guardianName = guardian.FullName
-		if guardian.Address != nil {
-			guardianAddr = *guardian.Address
-		}
 		if guardian.BirthDate != nil {
 			guardianBirth = *guardian.BirthDate
 		}

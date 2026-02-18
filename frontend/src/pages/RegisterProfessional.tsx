@@ -28,7 +28,14 @@ export function RegisterProfessional() {
   const [tradeName, setTradeName] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [cpf, setCpf] = useState('')
-  const [address, setAddress] = useState('')
+  const [street, setStreet] = useState('')
+  const [number, setNumber] = useState('')
+  const [complement, setComplement] = useState('')
+  const [neighborhood, setNeighborhood] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [country, setCountry] = useState('')
+  const [zip, setZip] = useState('')
   const [maritalStatus, setMaritalStatus] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -69,6 +76,15 @@ export function RegisterProfessional() {
       setError('A senha deve ter pelo menos 8 caracteres.')
       return
     }
+    if (!street.trim() || !neighborhood.trim() || !city.trim() || !state.trim() || !country.trim() || !zip.trim()) {
+      setError('Preencha o endereço: Rua, Bairro, Cidade, Estado, País e CEP.')
+      return
+    }
+    const cepDigits = zip.replace(/\D/g, '')
+    if (cepDigits.length !== 8) {
+      setError('CEP deve ter 8 dígitos.')
+      return
+    }
     setSubmitting(true)
     try {
       await api.acceptInvite({
@@ -78,7 +94,16 @@ export function RegisterProfessional() {
         trade_name: tradeName || undefined,
         birth_date: birthDate || undefined,
         cpf: cpf || undefined,
-        address: address || undefined,
+        address: {
+          street: street.trim(),
+          number: number.trim() || undefined,
+          complement: complement.trim() || undefined,
+          neighborhood: neighborhood.trim(),
+          city: city.trim(),
+          state: state.trim(),
+          country: country.trim(),
+          zip: cepDigits,
+        },
         marital_status: maritalStatus || undefined,
       })
       setSuccess(true)
@@ -156,7 +181,15 @@ export function RegisterProfessional() {
             helperText={cpf.trim() && !isValidCPF(cpf) ? 'CPF inválido.' : ' '}
             sx={{ mb: 1.5 }}
           />
-          <TextField label="Endereço" fullWidth placeholder="Rua, número, bairro, cidade, UF" value={address} onChange={(e) => setAddress(e.target.value)} sx={{ mb: 1.5 }} />
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>Endereço (obrigatório)</Typography>
+          <TextField label="Rua" fullWidth required value={street} onChange={(e) => setStreet(e.target.value)} sx={{ mb: 1.5 }} />
+          <TextField label="Número" fullWidth value={number} onChange={(e) => setNumber(e.target.value)} sx={{ mb: 1.5 }} />
+          <TextField label="Complemento" fullWidth value={complement} onChange={(e) => setComplement(e.target.value)} sx={{ mb: 1.5 }} />
+          <TextField label="Bairro" fullWidth required value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} sx={{ mb: 1.5 }} />
+          <TextField label="Cidade" fullWidth required value={city} onChange={(e) => setCity(e.target.value)} sx={{ mb: 1.5 }} />
+          <TextField label="Estado (UF)" fullWidth required placeholder="UF" inputProps={{ maxLength: 2 }} value={state} onChange={(e) => setState(e.target.value)} sx={{ mb: 1.5 }} />
+          <TextField label="País" fullWidth required value={country} onChange={(e) => setCountry(e.target.value)} sx={{ mb: 1.5 }} />
+          <TextField label="CEP" fullWidth required placeholder="00000000" inputProps={{ maxLength: 9 }} value={zip} onChange={(e) => setZip(e.target.value)} sx={{ mb: 1.5 }} />
           <FormControl fullWidth sx={{ mb: 1.5 }}>
             <InputLabel>Estado civil</InputLabel>
             <Select value={maritalStatus} label="Estado civil" onChange={(e) => setMaritalStatus(e.target.value)}>

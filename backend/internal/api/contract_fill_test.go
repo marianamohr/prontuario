@@ -20,7 +20,7 @@ func TestBuildGuardianSignatureHTML_FontsAndEscaping(t *testing.T) {
 
 func TestFillContractBody_DataReplaceAndNoLocalReplace(t *testing.T) {
 	body := "Local: Joinville\nData: [DATA]\nNome: [PACIENTE_NOME]\nAss: [ASSINATURA_RESPONSAVEL]"
-	out := FillContractBody(body, nil, nil, "Clinica", "Objeto", "Tipo", "Mensal", "100", nil, nil, "", "", "", "", "Joinville", "11/02/2026")
+	out := FillContractBody(body, nil, nil, "Clinica", "Objeto", "Tipo", "Mensal", "100", nil, nil, "", "", "", "", "Joinville", "11/02/2026", "")
 
 	// [DATA] replaced
 	if !contains(out, "11/02/2026") {

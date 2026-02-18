@@ -67,7 +67,14 @@ export function Backoffice() {
   const [editTradeName, setEditTradeName] = useState('')
   const [editStatus, setEditStatus] = useState('ACTIVE')
   const [editBirthDate, setEditBirthDate] = useState('')
-  const [editAddress, setEditAddress] = useState('')
+  const [editStreet, setEditStreet] = useState('')
+  const [editNumber, setEditNumber] = useState('')
+  const [editComplement, setEditComplement] = useState('')
+  const [editNeighborhood, setEditNeighborhood] = useState('')
+  const [editCity, setEditCity] = useState('')
+  const [editState, setEditState] = useState('')
+  const [editCountry, setEditCountry] = useState('')
+  const [editZip, setEditZip] = useState('')
   const [editPhone, setEditPhone] = useState('')
   const [editMaritalStatus, setEditMaritalStatus] = useState('')
   const [editCPF, setEditCPF] = useState('')
@@ -179,13 +186,19 @@ export function Backoffice() {
     setEditTradeName('')
     setEditStatus(u.status || 'ACTIVE')
     setEditBirthDate('')
-    setEditAddress('')
+    setEditStreet('')
+    setEditNumber('')
+    setEditComplement('')
+    setEditNeighborhood('')
+    setEditCity('')
+    setEditState('')
+    setEditCountry('')
+    setEditZip('')
     setEditPhone('')
     setEditMaritalStatus('')
     setEditCPF('')
     setShowCPF(false)
     setEditNewPassword('')
-    setEditMeta(null)
     try {
       const res = await api.getBackofficeUser(u.type, u.id)
       const d = res.user
@@ -194,7 +207,26 @@ export function Backoffice() {
       setEditTradeName(d.trade_name ? String(d.trade_name) : '')
       setEditStatus(d.status || u.status || 'ACTIVE')
       setEditBirthDate(d.birth_date ? String(d.birth_date) : '')
-      setEditAddress(d.address ? String(d.address) : '')
+      const addr = d.address
+      if (addr && typeof addr === 'object') {
+        setEditStreet(addr.street ?? '')
+        setEditNumber(addr.number ?? '')
+        setEditComplement(addr.complement ?? '')
+        setEditNeighborhood(addr.neighborhood ?? '')
+        setEditCity(addr.city ?? '')
+        setEditState(addr.state ?? '')
+        setEditCountry(addr.country ?? '')
+        setEditZip(addr.zip ?? '')
+      } else {
+        setEditStreet('')
+        setEditNumber('')
+        setEditComplement('')
+        setEditNeighborhood('')
+        setEditCity('')
+        setEditState('')
+        setEditCountry('')
+        setEditZip('')
+      }
       setEditPhone(d.phone ? String(d.phone) : '')
       setEditMaritalStatus(d.marital_status ? String(d.marital_status) : '')
       setEditCPF(d.cpf ? String(d.cpf) : '')
@@ -217,25 +249,38 @@ export function Backoffice() {
       return
     }
     try {
-      const payload: Record<string, string> = {
+      const payload: Record<string, string | api.Address | undefined> = {
         email: editEmail.trim(),
         full_name: editFullName.trim(),
         status: editStatus,
       }
+      const hasAddress = editStreet.trim() || editNeighborhood.trim() || editCity.trim() || editState.trim() || editCountry.trim() || editZip.trim()
+      const addressPayload: api.Address | undefined = hasAddress
+        ? {
+            street: editStreet.trim(),
+            number: editNumber.trim() || undefined,
+            complement: editComplement.trim() || undefined,
+            neighborhood: editNeighborhood.trim(),
+            city: editCity.trim(),
+            state: editState.trim(),
+            country: editCountry.trim(),
+            zip: editZip.replace(/\D/g, ''),
+          }
+        : undefined
       if (editingTarget.type === 'PROFESSIONAL') {
         if (editTradeName.trim()) payload.trade_name = editTradeName.trim()
         payload.birth_date = editBirthDate.trim()
-        payload.address = editAddress
+        payload.address = addressPayload
         payload.marital_status = editMaritalStatus
       } else if (editingTarget.type === 'LEGAL_GUARDIAN') {
         payload.birth_date = editBirthDate.trim()
-        payload.address = editAddress
+        payload.address = addressPayload
         payload.phone = editPhone.trim()
       }
       if (editCPF.trim()) payload.cpf = editCPF.trim()
       if (editNewPassword.trim()) payload.new_password = editNewPassword
 
-      await api.patchBackofficeUser(editingTarget.type, editingTarget.id, payload)
+      await api.patchBackofficeUser(editingTarget.type, editingTarget.id, payload as Parameters<typeof api.patchBackofficeUser>[2])
       await load()
       setEditingTarget(null)
     } catch (e) {
@@ -518,7 +563,15 @@ export function Backoffice() {
                   ),
                 }}
               />
-              <TextField label="Endereço" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} multiline minRows={2} fullWidth />
+              <Typography variant="subtitle2" color="text.secondary">Endereço</Typography>
+              <TextField label="Rua" value={editStreet} onChange={(e) => setEditStreet(e.target.value)} fullWidth />
+              <TextField label="Número" value={editNumber} onChange={(e) => setEditNumber(e.target.value)} fullWidth />
+              <TextField label="Complemento" value={editComplement} onChange={(e) => setEditComplement(e.target.value)} fullWidth />
+              <TextField label="Bairro" value={editNeighborhood} onChange={(e) => setEditNeighborhood(e.target.value)} fullWidth />
+              <TextField label="Cidade" value={editCity} onChange={(e) => setEditCity(e.target.value)} fullWidth />
+              <TextField label="Estado (UF)" value={editState} onChange={(e) => setEditState(e.target.value)} placeholder="UF" inputProps={{ maxLength: 2 }} fullWidth />
+              <TextField label="País" value={editCountry} onChange={(e) => setEditCountry(e.target.value)} fullWidth />
+              <TextField label="CEP" value={editZip} onChange={(e) => setEditZip(e.target.value)} placeholder="00000000" inputProps={{ maxLength: 9 }} fullWidth />
               <TextField label="Estado civil" value={editMaritalStatus} onChange={(e) => setEditMaritalStatus(e.target.value)} fullWidth />
             </>
           )}
@@ -526,7 +579,15 @@ export function Backoffice() {
           {editingTarget?.type === 'LEGAL_GUARDIAN' && (
             <>
               <TextField label="Data de nascimento" type="date" value={editBirthDate} onChange={(e) => setEditBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
-              <TextField label="Endereço" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} multiline minRows={2} fullWidth />
+              <Typography variant="subtitle2" color="text.secondary">Endereço</Typography>
+              <TextField label="Rua" value={editStreet} onChange={(e) => setEditStreet(e.target.value)} fullWidth />
+              <TextField label="Número" value={editNumber} onChange={(e) => setEditNumber(e.target.value)} fullWidth />
+              <TextField label="Complemento" value={editComplement} onChange={(e) => setEditComplement(e.target.value)} fullWidth />
+              <TextField label="Bairro" value={editNeighborhood} onChange={(e) => setEditNeighborhood(e.target.value)} fullWidth />
+              <TextField label="Cidade" value={editCity} onChange={(e) => setEditCity(e.target.value)} fullWidth />
+              <TextField label="Estado (UF)" value={editState} onChange={(e) => setEditState(e.target.value)} placeholder="UF" inputProps={{ maxLength: 2 }} fullWidth />
+              <TextField label="País" value={editCountry} onChange={(e) => setEditCountry(e.target.value)} fullWidth />
+              <TextField label="CEP" value={editZip} onChange={(e) => setEditZip(e.target.value)} placeholder="00000000" inputProps={{ maxLength: 9 }} fullWidth />
               <TextField label="Telefone (WhatsApp)" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+5511999999999" fullWidth />
               <TextField
                 label="CPF (opcional, para alterar)"

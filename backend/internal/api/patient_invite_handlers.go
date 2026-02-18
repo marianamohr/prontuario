@@ -97,14 +97,14 @@ func (h *Handler) GetPatientInviteByToken(w http.ResponseWriter, r *http.Request
 }
 
 type AcceptPatientInviteRequest struct {
-	Token             string `json:"token"`
-	SamePerson        bool   `json:"same_person"`
-	GuardianFullName  string `json:"guardian_full_name"`
-	GuardianCPF       string `json:"guardian_cpf"`
-	GuardianAddress   string `json:"guardian_address"`
-	GuardianBirthDate string `json:"guardian_birth_date"`
-	PatientFullName   string `json:"patient_full_name"`
-	PatientBirthDate  string `json:"patient_birth_date"`
+	Token             string      `json:"token"`
+	SamePerson        bool        `json:"same_person"`
+	GuardianFullName  string      `json:"guardian_full_name"`
+	GuardianCPF       string      `json:"guardian_cpf"`
+	GuardianAddress   interface{} `json:"guardian_address"` // objeto (8 campos) ou string (8 linhas)
+	GuardianBirthDate string      `json:"guardian_birth_date"`
+	PatientFullName   string      `json:"patient_full_name"`
+	PatientBirthDate  string      `json:"patient_birth_date"`
 }
 
 func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +116,6 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 	req.Token = strings.TrimSpace(req.Token)
 	req.GuardianFullName = strings.TrimSpace(req.GuardianFullName)
 	req.GuardianCPF = strings.TrimSpace(req.GuardianCPF)
-	req.GuardianAddress = strings.TrimSpace(req.GuardianAddress)
 	req.GuardianBirthDate = strings.TrimSpace(req.GuardianBirthDate)
 	req.PatientFullName = strings.TrimSpace(req.PatientFullName)
 	req.PatientBirthDate = strings.TrimSpace(req.PatientBirthDate)
@@ -125,8 +124,19 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
-	if req.GuardianFullName == "" || req.GuardianCPF == "" || req.GuardianAddress == "" || req.GuardianBirthDate == "" || req.PatientBirthDate == "" {
+	if req.GuardianFullName == "" || req.GuardianCPF == "" || req.GuardianBirthDate == "" || req.PatientBirthDate == "" {
 		http.Error(w, `{"error":"missing required fields"}`, http.StatusBadRequest)
+		return
+	}
+
+	// guardian_address: objeto (8 campos) ou string (8 linhas)
+	addrInput, err := parseAddressFromRequest(req.GuardianAddress)
+	if err != nil {
+		http.Error(w, `{"error":"guardian_address inválido: use objeto com 8 campos ou string de 8 linhas (rua, numero, complemento, bairro, cidade, estado, pais, cep)"}`, http.StatusBadRequest)
+		return
+	}
+	if err := ValidateAddress(addrInput); err != nil {
+		http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -184,7 +194,15 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upsert do responsável por email.
+	// Criar endereço na tabela addresses e obter ID
+	addr := AddressInputToRepo(addrInput)
+	addressID, err := repo.CreateAddressTx(r.Context(), tx, addr)
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Upsert do responsável por email (com address_id)
 	var guardianID uuid.UUID
 	err = tx.QueryRow(r.Context(), `SELECT id FROM legal_guardians WHERE email = $1 AND deleted_at IS NULL`, guardianEmail).Scan(&guardianID)
 	if err != nil {
@@ -195,9 +213,9 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 		// Cria novo.
 		guardianID = uuid.New()
 		_, err = tx.Exec(r.Context(), `
-			INSERT INTO legal_guardians (id, email, full_name, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address, birth_date, auth_provider, status)
+			INSERT INTO legal_guardians (id, email, full_name, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, birth_date, auth_provider, status)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'LOCAL'::auth_provider_enum, 'ACTIVE')
-		`, guardianID, guardianEmail, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, req.GuardianAddress, req.GuardianBirthDate)
+		`, guardianID, guardianEmail, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, addressID, req.GuardianBirthDate)
 		if err != nil {
 			http.Error(w, `{"error":"email ou cpf já utilizado"}`, http.StatusBadRequest)
 			return
@@ -211,11 +229,11 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 			    cpf_nonce = $3,
 			    cpf_key_version = $4::text,
 			    cpf_hash = $5::text,
-			    address = $6::text,
+			    address_id = $6,
 			    birth_date = NULLIF($7::text, '')::date,
 			    updated_at = now()
 			WHERE id = $8 AND deleted_at IS NULL
-		`, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, req.GuardianAddress, req.GuardianBirthDate, guardianID)
+		`, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, addressID, req.GuardianBirthDate, guardianID)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return

@@ -134,21 +134,43 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"users": list})
 }
 
+type BackofficeAddressResponse struct {
+	Street       *string `json:"street,omitempty"`
+	Number       *string `json:"number,omitempty"`
+	Complement   *string `json:"complement,omitempty"`
+	Neighborhood *string `json:"neighborhood,omitempty"`
+	City         *string `json:"city,omitempty"`
+	State        *string `json:"state,omitempty"`
+	Country      *string `json:"country,omitempty"`
+	Zip          *string `json:"zip,omitempty"`
+}
+
+func repoAddressToBackoffice(a *repo.Address) *BackofficeAddressResponse {
+	if a == nil {
+		return nil
+	}
+	return &BackofficeAddressResponse{
+		Street: a.Street, Number: a.Number, Complement: a.Complement,
+		Neighborhood: a.Neighborhood, City: a.City, State: a.State,
+		Country: a.Country, Zip: a.Zip,
+	}
+}
+
 type BackofficeUserDetailResponse struct {
-	Type          string  `json:"type"`
-	ID            string  `json:"id"`
-	Email         string  `json:"email"`
-	FullName      string  `json:"full_name"`
-	TradeName     *string `json:"trade_name,omitempty"`
-	Status        string  `json:"status"`
-	ClinicID      *string `json:"clinic_id,omitempty"`
-	BirthDate     *string `json:"birth_date,omitempty"`
-	Address       *string `json:"address,omitempty"`
-	Phone         *string `json:"phone,omitempty"`
-	MaritalStatus *string `json:"marital_status,omitempty"`
-	CPF           *string `json:"cpf,omitempty"`
-	AuthProvider  *string `json:"auth_provider,omitempty"`
-	HasGoogleSub  *bool   `json:"has_google_sub,omitempty"`
+	Type          string                    `json:"type"`
+	ID            string                    `json:"id"`
+	Email         string                    `json:"email"`
+	FullName      string                    `json:"full_name"`
+	TradeName     *string                   `json:"trade_name,omitempty"`
+	Status        string                    `json:"status"`
+	ClinicID      *string                   `json:"clinic_id,omitempty"`
+	BirthDate     *string                   `json:"birth_date,omitempty"`
+	Address       *BackofficeAddressResponse `json:"address,omitempty"`
+	Phone         *string                   `json:"phone,omitempty"`
+	MaritalStatus *string                   `json:"marital_status,omitempty"`
+	CPF           *string                   `json:"cpf,omitempty"`
+	AuthProvider  *string                   `json:"auth_provider,omitempty"`
+	HasGoogleSub  *bool                     `json:"has_google_sub,omitempty"`
 }
 
 func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
@@ -189,6 +211,12 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		cid := p.ClinicID.String()
+		var addrResp *BackofficeAddressResponse
+		if p.AddressID != nil {
+			if addr, err := repo.GetAddressByID(r.Context(), h.Pool, *p.AddressID); err == nil {
+				addrResp = repoAddressToBackoffice(addr)
+			}
+		}
 		resp = BackofficeUserDetailResponse{
 			Type:          "PROFESSIONAL",
 			ID:            p.ID.String(),
@@ -199,7 +227,7 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			ClinicID:      &cid,
 			BirthDate:     p.BirthDate,
 			CPF:           cpfStr,
-			Address:       p.Address,
+			Address:       addrResp,
 			MaritalStatus: p.MaritalStatus,
 		}
 	case "LEGAL_GUARDIAN":
@@ -225,6 +253,12 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		hasGoogle := g.GoogleSub != nil && strings.TrimSpace(*g.GoogleSub) != ""
+		var addrResp *BackofficeAddressResponse
+		if g.AddressID != nil {
+			if addr, err := repo.GetAddressByID(r.Context(), h.Pool, *g.AddressID); err == nil {
+				addrResp = repoAddressToBackoffice(addr)
+			}
+		}
 		resp = BackofficeUserDetailResponse{
 			Type:         "LEGAL_GUARDIAN",
 			ID:           g.ID.String(),
@@ -232,7 +266,7 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			FullName:     g.FullName,
 			Status:       g.Status,
 			BirthDate:    g.BirthDate,
-			Address:      g.Address,
+			Address:      addrResp,
 			Phone:        g.Phone,
 			CPF:          cpfStr,
 			AuthProvider: &g.AuthProvider,
@@ -247,17 +281,17 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 }
 
 type PatchBackofficeUserRequest struct {
-	Email         *string `json:"email"`
-	FullName      *string `json:"full_name"`
-	TradeName     *string `json:"trade_name"`
-	Status        *string `json:"status"`
-	ClinicID      *string `json:"clinic_id"`
-	BirthDate     *string `json:"birth_date"`
-	Address       *string `json:"address"`
-	Phone         *string `json:"phone"`
-	MaritalStatus *string `json:"marital_status"`
-	CPF           *string `json:"cpf"`
-	NewPassword   *string `json:"new_password"`
+	Email         *string                   `json:"email"`
+	FullName      *string                   `json:"full_name"`
+	TradeName     *string                   `json:"trade_name"`
+	Status        *string                   `json:"status"`
+	ClinicID      *string                   `json:"clinic_id"`
+	BirthDate     *string                   `json:"birth_date"`
+	Address       *BackofficeAddressResponse `json:"address"` // 8 campos
+	Phone         *string                   `json:"phone"`
+	MaritalStatus *string                   `json:"marital_status"`
+	CPF           *string                   `json:"cpf"`
+	NewPassword   *string                   `json:"new_password"`
 }
 
 func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
@@ -365,6 +399,30 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			cpfNonce = nonce
 			cpfKeyVer = &keyVer
 		}
+		var addressID *uuid.UUID
+		if req.Address != nil {
+			addrInput := &AddressInput{
+				Street:       strFromPtr(req.Address.Street),
+				Number:       strFromPtr(req.Address.Number),
+				Complement:   strFromPtr(req.Address.Complement),
+				Neighborhood: strFromPtr(req.Address.Neighborhood),
+				City:         strFromPtr(req.Address.City),
+				State:        strFromPtr(req.Address.State),
+				Country:      strFromPtr(req.Address.Country),
+				Zip:          strFromPtr(req.Address.Zip),
+			}
+			if err := ValidateAddress(addrInput); err != nil {
+				http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+				return
+			}
+			addr := AddressInputToRepo(addrInput)
+			id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+			if err != nil {
+				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+				return
+			}
+			addressID = &id
+		}
 		if err := repo.UpdateProfessionalAdmin(
 			r.Context(),
 			h.Pool,
@@ -375,7 +433,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			clinicUUID,
 			req.Status,
 			req.BirthDate,
-			req.Address,
+			addressID,
 			req.MaritalStatus,
 			cpfHash,
 			cpfEnc,
@@ -449,13 +507,37 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			cpfNonce = nonce
 			cpfKeyVer = &keyVer
 		}
+		var lgAddressID *uuid.UUID
+		if req.Address != nil {
+			addrInput := &AddressInput{
+				Street:       strFromPtr(req.Address.Street),
+				Number:       strFromPtr(req.Address.Number),
+				Complement:   strFromPtr(req.Address.Complement),
+				Neighborhood: strFromPtr(req.Address.Neighborhood),
+				City:         strFromPtr(req.Address.City),
+				State:        strFromPtr(req.Address.State),
+				Country:      strFromPtr(req.Address.Country),
+				Zip:          strFromPtr(req.Address.Zip),
+			}
+			if err := ValidateAddress(addrInput); err != nil {
+				http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+				return
+			}
+			addr := AddressInputToRepo(addrInput)
+			aid, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+			if err != nil {
+				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+				return
+			}
+			lgAddressID = &aid
+		}
 		if err := repo.UpdateLegalGuardianAdmin(
 			r.Context(),
 			h.Pool,
 			id,
 			req.FullName,
 			req.Email,
-			req.Address,
+			lgAddressID,
 			req.BirthDate,
 			req.Phone,
 			req.Status,
@@ -493,6 +575,22 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 	// Retorna o usuário atualizado
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Usuário atualizado."})
+}
+
+// CleanupOrphanAddresses remove endereços não referenciados (apenas SUPER_ADMIN).
+func (h *Handler) CleanupOrphanAddresses(w http.ResponseWriter, r *http.Request) {
+	if !auth.IsSuperAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	deleted, err := repo.CleanupOrphanAddresses(r.Context(), h.Pool)
+	if err != nil {
+		log.Printf("[backoffice] cleanup orphan addresses: %v", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"deleted": deleted, "message": "Endereços órfãos removidos."})
 }
 
 func (h *Handler) ImpersonateStart(w http.ResponseWriter, r *http.Request) {

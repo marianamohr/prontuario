@@ -133,12 +133,18 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
+			var guardianAddr map[string]interface{}
+			if g.AddressID != nil {
+				if addr, err := repo.GetAddressByID(r.Context(), h.Pool, *g.AddressID); err == nil {
+					guardianAddr = AddressToMap(addr)
+				}
+			}
 			out["guardian"] = map[string]interface{}{
 				"id":         g.ID.String(),
 				"full_name":  g.FullName,
 				"email":      g.Email,
 				"cpf":        cpfStr,
-				"address":    g.Address,
+				"address":    guardianAddr,
 				"birth_date": g.BirthDate,
 				"phone":      g.Phone,
 			}
@@ -149,16 +155,17 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdatePatientRequest struct {
-	FullName          *string `json:"full_name"`
-	BirthDate         *string `json:"birth_date"`
-	Email             *string `json:"email"`
-	PatientCPF        *string `json:"patient_cpf"`
-	GuardianFullName  *string `json:"guardian_full_name"`
-	GuardianEmail     *string `json:"guardian_email"`
-	GuardianAddress   *string `json:"guardian_address"`
-	GuardianBirthDate *string `json:"guardian_birth_date"`
-	GuardianPhone     *string `json:"guardian_phone"`
-	GuardianCPF       *string `json:"guardian_cpf"`
+	FullName          *string     `json:"full_name"`
+	BirthDate         *string     `json:"birth_date"`
+	Email             *string     `json:"email"`
+	PatientCPF        *string     `json:"patient_cpf"`
+	PatientAddress   interface{} `json:"patient_address,omitempty"` // opcional: objeto ou 8 linhas
+	GuardianFullName  *string     `json:"guardian_full_name"`
+	GuardianEmail     *string     `json:"guardian_email"`
+	GuardianAddress   interface{} `json:"guardian_address"` // objeto ou 8 linhas
+	GuardianBirthDate *string     `json:"guardian_birth_date"`
+	GuardianPhone     *string     `json:"guardian_phone"`
+	GuardianCPF       *string     `json:"guardian_cpf"`
 }
 
 func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +225,28 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 	} else {
 		email = p.Email
 	}
-	if err := repo.UpdatePatient(r.Context(), h.Pool, p.ID, cid, fullName, birthDate, email); err != nil {
+	var patientAddrID *uuid.UUID
+	if req.PatientAddress != nil {
+		addrInput, err := parseAddressFromRequest(req.PatientAddress)
+		if err != nil {
+			http.Error(w, `{"error":"patient_address inválido: use objeto com 8 campos ou string de 8 linhas"}`, http.StatusBadRequest)
+			return
+		}
+		if err := ValidateAddress(addrInput); err != nil {
+			http.Error(w, `{"error":"patient_address inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+			return
+		}
+		addr := AddressInputToRepo(addrInput)
+		id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+		if err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		patientAddrID = &id
+	} else {
+		patientAddrID = p.AddressID
+	}
+	if err := repo.UpdatePatient(r.Context(), h.Pool, p.ID, cid, fullName, birthDate, email, patientAddrID); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -285,31 +313,28 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		var gAddr, gBirth *string
+		var gAddrID *uuid.UUID
 		if req.GuardianAddress != nil {
-			s := strings.TrimSpace(*req.GuardianAddress)
-			if s != "" {
-				addrParts := strings.Split(s, "\n")
-				if len(addrParts) < 6 {
-					http.Error(w, `{"error":"guardian_address deve conter Rua, Bairro, Cidade, Estado, País e CEP"}`, http.StatusBadRequest)
-					return
-				}
-				cepNorm := strings.TrimSpace(addrParts[5])
-				cepDigits := strings.Map(func(r rune) rune {
-					if r >= '0' && r <= '9' {
-						return r
-					}
-					return -1
-				}, cepNorm)
-				if len(cepDigits) != 8 {
-					http.Error(w, `{"error":"CEP inválido (deve ter 8 dígitos)"}`, http.StatusBadRequest)
-					return
-				}
+			addrInput, err := parseAddressFromRequest(req.GuardianAddress)
+			if err != nil {
+				http.Error(w, `{"error":"guardian_address inválido: use objeto com 8 campos ou string de 8 linhas"}`, http.StatusBadRequest)
+				return
 			}
-			gAddr = &s
+			if err := ValidateAddress(addrInput); err != nil {
+				http.Error(w, `{"error":"guardian_address inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+				return
+			}
+			addr := AddressInputToRepo(addrInput)
+			id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+			if err != nil {
+				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+				return
+			}
+			gAddrID = &id
 		} else {
-			gAddr = g.Address
+			gAddrID = g.AddressID
 		}
+		var gBirth *string
 		if req.GuardianBirthDate != nil {
 			s := strings.TrimSpace(*req.GuardianBirthDate)
 			gBirth = &s
@@ -328,7 +353,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 			gPhone = g.Phone
 		}
 		// Atualiza dados não sensíveis
-		if err := repo.UpdateLegalGuardian(r.Context(), h.Pool, g.ID, gFullName, gEmail, gAddr, gBirth, gPhone, nil); err != nil {
+		if err := repo.UpdateLegalGuardian(r.Context(), h.Pool, g.ID, gFullName, gEmail, gAddrID, gBirth, gPhone, nil); err != nil {
 			if isUniqueViolation(err) {
 				http.Error(w, `{"error":"email já utilizado"}`, http.StatusBadRequest)
 				return
@@ -376,15 +401,16 @@ type CreatePatientRequest struct {
 	FullName   string  `json:"full_name"`
 	BirthDate  *string `json:"birth_date,omitempty"`
 	PatientCPF *string `json:"patient_cpf,omitempty"`
+	PatientAddress interface{} `json:"patient_address,omitempty"` // opcional: objeto ou 8 linhas
 	// Com guardião legal (quando preenchido cria responsável + vínculo)
-	SamePerson        bool   `json:"same_person"`
-	GuardianFullName  string `json:"guardian_full_name"`
-	GuardianEmail     string `json:"guardian_email"`
-	GuardianCPF       string `json:"guardian_cpf"`
-	GuardianAddress   string `json:"guardian_address"`
-	GuardianBirthDate string `json:"guardian_birth_date"`
-	GuardianPhone     string `json:"guardian_phone"`
-	PatientFullName   string `json:"patient_full_name"`
+	SamePerson        bool        `json:"same_person"`
+	GuardianFullName  string      `json:"guardian_full_name"`
+	GuardianEmail     string      `json:"guardian_email"`
+	GuardianCPF       string      `json:"guardian_cpf"`
+	GuardianAddress   interface{} `json:"guardian_address"` // objeto (8 campos) ou string (8 linhas)
+	GuardianBirthDate string      `json:"guardian_birth_date"`
+	GuardianPhone     string      `json:"guardian_phone"`
+	PatientFullName   string      `json:"patient_full_name"`
 }
 
 func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
@@ -420,25 +446,13 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"guardian_cpf required"}`, http.StatusBadRequest)
 			return
 		}
-		if req.GuardianAddress == "" {
-			http.Error(w, `{"error":"guardian_address required"}`, http.StatusBadRequest)
+		guardianAddrInput, err := parseAddressFromRequest(req.GuardianAddress)
+		if err != nil {
+			http.Error(w, `{"error":"guardian_address required: use objeto com 8 campos ou string de 8 linhas (rua, numero, complemento, bairro, cidade, estado, pais, cep)"}`, http.StatusBadRequest)
 			return
 		}
-		addrParts := strings.Split(req.GuardianAddress, "\n")
-		if len(addrParts) < 6 {
-			http.Error(w, `{"error":"guardian_address deve conter Rua, Bairro, Cidade, Estado, País e CEP"}`, http.StatusBadRequest)
-			return
-		}
-		// CEP: 8 dígitos
-		cepNorm := strings.TrimSpace(addrParts[5])
-		cepDigits := strings.Map(func(r rune) rune {
-			if r >= '0' && r <= '9' {
-				return r
-			}
-			return -1
-		}, cepNorm)
-		if len(cepDigits) != 8 {
-			http.Error(w, `{"error":"CEP inválido (deve ter 8 dígitos)"}`, http.StatusBadRequest)
+		if err := ValidateAddress(guardianAddrInput); err != nil {
+			http.Error(w, `{"error":"guardian_address inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
 			return
 		}
 		if req.GuardianBirthDate == "" {
@@ -473,7 +487,12 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"encryption"}`, http.StatusInternalServerError)
 			return
 		}
-		addr := req.GuardianAddress
+		guardianAddr := AddressInputToRepo(guardianAddrInput)
+		guardianAddressID, err := repo.CreateAddress(r.Context(), h.Pool, guardianAddr)
+		if err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
 		guardianBirth := req.GuardianBirthDate
 		var gPhone *string
 		if s := strings.TrimSpace(req.GuardianPhone); s != "" {
@@ -487,7 +506,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			CPFNonce:      nonce,
 			CPFKeyVersion: &keyVer,
 			CPFHash:       &cpfHash,
-			Address:       &addr,
+			AddressID:     &guardianAddressID,
 			BirthDate:     &guardianBirth,
 			Phone:         gPhone,
 			AuthProvider:  "LOCAL",
@@ -497,7 +516,17 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"email já utilizado ou internal"}`, http.StatusBadRequest)
 			return
 		}
-		patientID, err := repo.CreatePatient(r.Context(), h.Pool, cid, patientName, req.BirthDate, nil)
+		var patientAddrID *uuid.UUID
+		if req.PatientAddress != nil {
+			addrInput, err := parseAddressFromRequest(req.PatientAddress)
+			if err == nil && ValidateAddress(addrInput) == nil {
+				addr := AddressInputToRepo(addrInput)
+				if id, err := repo.CreateAddress(r.Context(), h.Pool, addr); err == nil {
+					patientAddrID = &id
+				}
+			}
+		}
+		patientID, err := repo.CreatePatient(r.Context(), h.Pool, cid, patientName, req.BirthDate, nil, patientAddrID)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
@@ -553,7 +582,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"full_name required"}`, http.StatusBadRequest)
 		return
 	}
-	id, err := repo.CreatePatient(r.Context(), h.Pool, cid, req.FullName, req.BirthDate, nil)
+	id, err := repo.CreatePatient(r.Context(), h.Pool, cid, req.FullName, req.BirthDate, nil, nil)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -872,7 +901,8 @@ func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request)
 	rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
 	_ = errRules
 	consultasPrevistas := FormatScheduleRulesText(rules)
-	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "")
+	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "", guardianAddrStr)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
 }
@@ -972,7 +1002,8 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 		periodicidadeDisplay = strPtrVal(tpl.Periodicidade)
 	}
 	consultasPrevistas := ""
-	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "")
+	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "", guardianAddrStr)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
 }

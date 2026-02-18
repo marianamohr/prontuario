@@ -508,7 +508,8 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 		if c.SignedAt != nil {
 			dataAssinatura = c.SignedAt.Format("02/01/2006 15:04:05")
 		}
-		bodyHTML = FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), sigData, profName, dataInicio, dataFim, guardianSigHTML, consultasPrevistas, localVal, dataAssinatura)
+		guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+		bodyHTML = FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), sigData, profName, dataInicio, dataFim, guardianSigHTML, consultasPrevistas, localVal, dataAssinatura, guardianAddrStr)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{

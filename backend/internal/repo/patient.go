@@ -14,6 +14,7 @@ type Patient struct {
 	FullName      string
 	BirthDate     *string
 	Email         *string
+	AddressID     *uuid.UUID
 	CPFEncrypted  []byte
 	CPFNonce      []byte
 	CPFKeyVersion *string
@@ -22,7 +23,7 @@ type Patient struct {
 
 func PatientsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) ([]Patient, error) {
 	rows, err := pool.Query(ctx, `
-		SELECT id, clinic_id, full_name, birth_date::text, email,
+		SELECT id, clinic_id, full_name, birth_date::text, email, address_id,
 		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash
 		FROM patients
 		WHERE clinic_id = $1 AND deleted_at IS NULL
@@ -36,11 +37,13 @@ func PatientsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUI
 	for rows.Next() {
 		var p Patient
 		var birth *string
+		var addrID *uuid.UUID
 		var cpfKeyVer, cpfHash *string
-		if err := rows.Scan(&p.ID, &p.ClinicID, &p.FullName, &birth, &p.Email, &p.CPFEncrypted, &p.CPFNonce, &cpfKeyVer, &cpfHash); err != nil {
+		if err := rows.Scan(&p.ID, &p.ClinicID, &p.FullName, &birth, &p.Email, &addrID, &p.CPFEncrypted, &p.CPFNonce, &cpfKeyVer, &cpfHash); err != nil {
 			return nil, err
 		}
 		p.BirthDate = birth
+		p.AddressID = addrID
 		p.CPFKeyVersion = cpfKeyVer
 		p.CPFHash = cpfHash
 		list = append(list, p)
@@ -51,48 +54,52 @@ func PatientsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUI
 func PatientByIDAndClinic(ctx context.Context, pool *pgxpool.Pool, id, clinicID uuid.UUID) (*Patient, error) {
 	var p Patient
 	var birth *string
+	var addrID *uuid.UUID
 	err := pool.QueryRow(ctx, `
-		SELECT id, clinic_id, full_name, birth_date::text, email,
+		SELECT id, clinic_id, full_name, birth_date::text, email, address_id,
 		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash
 		FROM patients
 		WHERE id = $1 AND clinic_id = $2 AND deleted_at IS NULL
-	`, id, clinicID).Scan(&p.ID, &p.ClinicID, &p.FullName, &birth, &p.Email, &p.CPFEncrypted, &p.CPFNonce, &p.CPFKeyVersion, &p.CPFHash)
+	`, id, clinicID).Scan(&p.ID, &p.ClinicID, &p.FullName, &birth, &p.Email, &addrID, &p.CPFEncrypted, &p.CPFNonce, &p.CPFKeyVersion, &p.CPFHash)
 	if err != nil {
 		return nil, err
 	}
 	p.BirthDate = birth
+	p.AddressID = addrID
 	return &p, nil
 }
 
 func PatientByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Patient, error) {
 	var p Patient
 	var birth *string
+	var addrID *uuid.UUID
 	err := pool.QueryRow(ctx, `
-		SELECT id, clinic_id, full_name, birth_date::text, email,
+		SELECT id, clinic_id, full_name, birth_date::text, email, address_id,
 		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash
 		FROM patients
 		WHERE id = $1 AND deleted_at IS NULL
-	`, id).Scan(&p.ID, &p.ClinicID, &p.FullName, &birth, &p.Email, &p.CPFEncrypted, &p.CPFNonce, &p.CPFKeyVersion, &p.CPFHash)
+	`, id).Scan(&p.ID, &p.ClinicID, &p.FullName, &birth, &p.Email, &addrID, &p.CPFEncrypted, &p.CPFNonce, &p.CPFKeyVersion, &p.CPFHash)
 	if err != nil {
 		return nil, err
 	}
 	p.BirthDate = birth
+	p.AddressID = addrID
 	return &p, nil
 }
 
-func CreatePatient(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, fullName string, birthDate *string, email *string) (uuid.UUID, error) {
+func CreatePatient(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, fullName string, birthDate *string, email *string, addressID *uuid.UUID) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := pool.QueryRow(ctx, `
-		INSERT INTO patients (clinic_id, full_name, birth_date, email) VALUES ($1, $2, $3, $4) RETURNING id
-	`, clinicID, fullName, birthDate, email).Scan(&id)
+		INSERT INTO patients (clinic_id, full_name, birth_date, email, address_id) VALUES ($1, $2, $3, $4, $5) RETURNING id
+	`, clinicID, fullName, birthDate, email, addressID).Scan(&id)
 	return id, err
 }
 
-func UpdatePatient(ctx context.Context, pool *pgxpool.Pool, id, clinicID uuid.UUID, fullName string, birthDate *string, email *string) error {
+func UpdatePatient(ctx context.Context, pool *pgxpool.Pool, id, clinicID uuid.UUID, fullName string, birthDate *string, email *string, addressID *uuid.UUID) error {
 	result, err := pool.Exec(ctx, `
-		UPDATE patients SET full_name = $1, birth_date = $2, email = $3, updated_at = now()
-		WHERE id = $4 AND clinic_id = $5 AND deleted_at IS NULL
-	`, fullName, birthDate, email, id, clinicID)
+		UPDATE patients SET full_name = $1, birth_date = $2, email = $3, address_id = $4, updated_at = now()
+		WHERE id = $5 AND clinic_id = $6 AND deleted_at IS NULL
+	`, fullName, birthDate, email, addressID, id, clinicID)
 	if err != nil {
 		return err
 	}

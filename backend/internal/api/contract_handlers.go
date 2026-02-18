@@ -71,7 +71,8 @@ func (h *Handler) GetContractByToken(w http.ResponseWriter, r *http.Request) {
 	consultasPrevistas := FormatScheduleRulesText(rules)
 	// Apenas [DATA] é substituída (data do dia em que a pessoa abre o link, DD/MM/AAAA). Local já vem no template.
 	dataVal := time.Now().Format("02/01/2006")
-	bodyHTML := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), signatureData, professionalName, dataInicio, dataFim, "", consultasPrevistas, "", dataVal)
+	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+	bodyHTML := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), signatureData, professionalName, dataInicio, dataFim, "", consultasPrevistas, "", dataVal, guardianAddrStr)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(ContractByTokenResponse{
 		ContractID:      c.ID.String(),
@@ -153,7 +154,8 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	signedAtReal := time.Now().Format("02/01/2006 15:04:05")
 	// Apenas [DATA] no corpo: data do dia da assinatura (DD/MM/AAAA). Local já vem no template.
 	dataNoCorpo := time.Now().Format("02/01/2006")
-	bodyHTML := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), signatureData, professionalName, dataInicio, dataFim, guardianSigHTML, consultasPrevistas, "", dataNoCorpo)
+	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+	bodyHTML := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), signatureData, professionalName, dataInicio, dataFim, guardianSigHTML, consultasPrevistas, "", dataNoCorpo, guardianAddrStr)
 	verificationToken := uuid.New().String()
 	bodyText := pdf.BodyFromHTML(bodyHTML)
 	block := pdf.FormatSignatureBlock(guardian.FullName, guardian.Email, signedAtReal, "", verificationToken, h.Cfg.AppPublicURL)

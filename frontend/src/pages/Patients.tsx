@@ -38,15 +38,45 @@ const DEFAULT_NEGATION = '#dc2626'
 /** Valida formato de e-mail (uma @ e domínio com ponto). */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** Junta os 6 campos de endereço em uma única string (separador: newline). */
-function buildAddress(rua: string, bairro: string, cidade: string, estado: string, pais: string, cep: string): string {
-  return [rua, bairro, cidade, estado, pais, cep].join('\n')
+/** Monta objeto Address (8 campos) para a API. */
+function buildAddressObject(
+  street: string,
+  number: string,
+  complement: string,
+  neighborhood: string,
+  city: string,
+  state: string,
+  country: string,
+  zip: string
+): api.Address {
+  return {
+    street: street.trim(),
+    number: number.trim() || undefined,
+    complement: complement.trim() || undefined,
+    neighborhood: neighborhood.trim(),
+    city: city.trim(),
+    state: state.trim(),
+    country: country.trim(),
+    zip: zip.replace(/\D/g, ''),
+  }
 }
 
-/** Separa a string de endereço em 6 campos (Rua, Bairro, Cidade, Estado, País, CEP). */
-function parseAddress(addr: string | undefined): [string, string, string, string, string, string] {
-  if (!addr?.trim()) return ['', '', '', '', '', '']
-  const parts = addr.split('\n')
+/** Extrai 8 campos do endereço (objeto da API ou string legacy). */
+function parseAddress(addr: api.Address | string | undefined): [string, string, string, string, string, string, string, string] {
+  if (!addr) return ['', '', '', '', '', '', '', '']
+  if (typeof addr === 'object') {
+    return [
+      addr.street ?? '',
+      addr.number ?? '',
+      addr.complement ?? '',
+      addr.neighborhood ?? '',
+      addr.city ?? '',
+      addr.state ?? '',
+      addr.country ?? '',
+      addr.zip ?? '',
+    ]
+  }
+  const parts = String(addr).split('\n')
   return [
     parts[0]?.trim() ?? '',
     parts[1]?.trim() ?? '',
@@ -54,6 +84,8 @@ function parseAddress(addr: string | undefined): [string, string, string, string
     parts[3]?.trim() ?? '',
     parts[4]?.trim() ?? '',
     parts[5]?.trim() ?? '',
+    parts[6]?.trim() ?? '',
+    parts[7]?.trim() ?? '',
   ]
 }
 
@@ -86,6 +118,8 @@ export function Patients() {
   const [patientCpf, setPatientCpf] = useState('')
   const [showPatientCPF, setShowPatientCPF] = useState(false)
   const [guardianRua, setGuardianRua] = useState('')
+  const [guardianNumero, setGuardianNumero] = useState('')
+  const [guardianComplemento, setGuardianComplemento] = useState('')
   const [guardianBairro, setGuardianBairro] = useState('')
   const [guardianCidade, setGuardianCidade] = useState('')
   const [guardianEstado, setGuardianEstado] = useState('')
@@ -108,6 +142,8 @@ export function Patients() {
   const [editGuardianFullName, setEditGuardianFullName] = useState('')
   const [editGuardianEmail, setEditGuardianEmail] = useState('')
   const [editGuardianRua, setEditGuardianRua] = useState('')
+  const [editGuardianNumero, setEditGuardianNumero] = useState('')
+  const [editGuardianComplemento, setEditGuardianComplemento] = useState('')
   const [editGuardianBairro, setEditGuardianBairro] = useState('')
   const [editGuardianCidade, setEditGuardianCidade] = useState('')
   const [editGuardianEstado, setEditGuardianEstado] = useState('')
@@ -144,6 +180,8 @@ export function Patients() {
     setPatientCpf('')
     setShowPatientCPF(false)
     setGuardianRua('')
+    setGuardianNumero('')
+    setGuardianComplemento('')
     setGuardianBairro('')
     setGuardianCidade('')
     setGuardianEstado('')
@@ -224,7 +262,7 @@ export function Patients() {
           guardian_full_name: guardianFullName.trim(),
           guardian_email: guardianEmail.trim(),
           guardian_cpf: guardianCpf.trim(),
-          guardian_address: buildAddress(guardianRua.trim(), guardianBairro.trim(), guardianCidade.trim(), guardianEstado.trim(), guardianPais.trim(), guardianCep.replace(/\D/g, '')),
+          guardian_address: buildAddressObject(guardianRua, guardianNumero, guardianComplemento, guardianBairro, guardianCidade, guardianEstado, guardianPais, guardianCep),
           guardian_birth_date: guardianBirthDate.trim(),
           guardian_phone: guardianPhone.trim() || undefined,
           patient_full_name: samePerson ? '' : patientFullName.trim(),
@@ -256,6 +294,8 @@ export function Patients() {
     setEditGuardianFullName('')
     setEditGuardianEmail('')
     setEditGuardianRua('')
+    setEditGuardianNumero('')
+    setEditGuardianComplemento('')
     setEditGuardianBairro('')
     setEditGuardianCidade('')
     setEditGuardianEstado('')
@@ -280,8 +320,10 @@ export function Patients() {
         setEditGuardianId(data.guardian.id ?? null)
         setEditGuardianFullName(data.guardian.full_name ?? '')
         setEditGuardianEmail(data.guardian.email ?? '')
-        const [rua, bairro, cidade, estado, pais, cep] = parseAddress(data.guardian.address ?? undefined)
+        const [rua, numero, complemento, bairro, cidade, estado, pais, cep] = parseAddress(data.guardian.address ?? undefined)
         setEditGuardianRua(rua)
+        setEditGuardianNumero(numero)
+        setEditGuardianComplemento(complemento)
         setEditGuardianBairro(bairro)
         setEditGuardianCidade(cidade)
         setEditGuardianEstado(estado)
@@ -348,7 +390,7 @@ export function Patients() {
         }
         payload.guardian_full_name = editGuardianFullName.trim() || undefined
         payload.guardian_email = editGuardianEmail.trim() || undefined
-        payload.guardian_address = hasAnyAddress ? buildAddress(editGuardianRua.trim(), editGuardianBairro.trim(), editGuardianCidade.trim(), editGuardianEstado.trim(), editGuardianPais.trim(), editGuardianCep.replace(/\D/g, '')) : undefined
+        payload.guardian_address = hasAnyAddress ? buildAddressObject(editGuardianRua, editGuardianNumero, editGuardianComplemento, editGuardianBairro, editGuardianCidade, editGuardianEstado, editGuardianPais, editGuardianCep) : undefined
         payload.guardian_birth_date = editGuardianBirthDate.trim() || undefined
         payload.guardian_phone = editGuardianPhone.trim() || undefined
         if (editGuardianCpf.trim()) {
@@ -561,7 +603,9 @@ export function Patients() {
               }}
             />
             <Typography variant="subtitle2" color="text.secondary">Endereço do responsável (obrigatório se e-mail preenchido)</Typography>
-            <TextField label="Rua" value={guardianRua} onChange={(e) => setGuardianRua(e.target.value)} placeholder="Rua, número, complemento" fullWidth />
+            <TextField label="Rua" value={guardianRua} onChange={(e) => setGuardianRua(e.target.value)} fullWidth />
+            <TextField label="Número" value={guardianNumero} onChange={(e) => setGuardianNumero(e.target.value)} fullWidth />
+            <TextField label="Complemento" value={guardianComplemento} onChange={(e) => setGuardianComplemento(e.target.value)} fullWidth />
             <TextField label="Bairro" value={guardianBairro} onChange={(e) => setGuardianBairro(e.target.value)} fullWidth />
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <TextField label="Cidade" value={guardianCidade} onChange={(e) => setGuardianCidade(e.target.value)} sx={{ flex: 1, minWidth: 120 }} />
@@ -697,7 +741,9 @@ export function Patients() {
                 <TextField label="Data de nascimento do responsável" type="date" value={editGuardianBirthDate} onChange={(e) => setEditGuardianBirthDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
                 <TextField label="Telefone (WhatsApp)" value={editGuardianPhone} onChange={(e) => setEditGuardianPhone(e.target.value)} placeholder="+5511999999999" fullWidth />
                 <Typography variant="subtitle2" color="text.secondary">Endereço</Typography>
-                <TextField label="Rua" value={editGuardianRua} onChange={(e) => setEditGuardianRua(e.target.value)} placeholder="Rua, número, complemento" fullWidth />
+                <TextField label="Rua" value={editGuardianRua} onChange={(e) => setEditGuardianRua(e.target.value)} fullWidth />
+                <TextField label="Número" value={editGuardianNumero} onChange={(e) => setEditGuardianNumero(e.target.value)} fullWidth />
+                <TextField label="Complemento" value={editGuardianComplemento} onChange={(e) => setEditGuardianComplemento(e.target.value)} fullWidth />
                 <TextField label="Bairro" value={editGuardianBairro} onChange={(e) => setEditGuardianBairro(e.target.value)} fullWidth />
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <TextField label="Cidade" value={editGuardianCidade} onChange={(e) => setEditGuardianCidade(e.target.value)} sx={{ flex: 1, minWidth: 120 }} />

@@ -117,6 +117,17 @@ export async function api<T>(
   return undefined as unknown as T
 }
 
+export type Address = {
+  street: string
+  number?: string
+  complement?: string
+  neighborhood: string
+  city: string
+  state: string
+  country: string
+  zip: string
+}
+
 export type User = {
   id: string
   email?: string
@@ -201,7 +212,7 @@ export type MyProfile = {
   full_name: string
   trade_name?: string | null
   birth_date?: string | null
-  address?: string | null
+  address?: Address | null
   marital_status?: string | null
 }
 
@@ -213,7 +224,7 @@ export function patchMyProfile(payload: {
   full_name: string
   trade_name?: string
   birth_date?: string
-  address?: string
+  address?: Address
   marital_status?: string
 }) {
   return api<{ message: string }>('/api/me/profile', { method: 'PATCH', json: payload })
@@ -300,7 +311,7 @@ export type PatientDetail = {
     full_name: string
     email: string
     cpf?: string | null
-    address?: string | null
+    address?: Address | null
     birth_date?: string | null
     phone?: string | null
   }
@@ -315,9 +326,10 @@ export type UpdatePatientPayload = {
   birth_date?: string
   email?: string
   patient_cpf?: string
+  patient_address?: Address
   guardian_full_name?: string
   guardian_email?: string
-  guardian_address?: string
+  guardian_address?: Address
   guardian_birth_date?: string
   guardian_phone?: string
   guardian_cpf?: string
@@ -343,11 +355,12 @@ export type CreatePatientPayload = {
   full_name?: string
   birth_date?: string
   patient_cpf?: string
+  patient_address?: Address
   same_person?: boolean
   guardian_full_name?: string
   guardian_email?: string
   guardian_cpf?: string
-  guardian_address?: string
+  guardian_address?: Address
   guardian_birth_date?: string
   guardian_phone?: string
   patient_full_name?: string
@@ -502,7 +515,7 @@ export type BackofficeUserDetail = {
   status: string
   clinic_id?: string
   birth_date?: string | null
-  address?: string | null
+  address?: Address | null
   phone?: string | null
   marital_status?: string | null
   cpf?: string
@@ -521,7 +534,7 @@ export function patchBackofficeUser(type: string, id: string, payload: {
   status?: string
   clinic_id?: string
   birth_date?: string
-  address?: string
+  address?: Address
   phone?: string
   marital_status?: string
   cpf?: string
@@ -647,7 +660,7 @@ export function acceptInvite(data: {
   trade_name?: string
   birth_date?: string
   cpf?: string
-  address?: string
+  address?: Address
   marital_status?: string
 }) {
   return api<{ message: string }>('/api/invites/accept', {
@@ -674,7 +687,7 @@ export function acceptPatientInvite(data: {
   same_person: boolean
   guardian_full_name: string
   guardian_cpf: string
-  guardian_address: string
+  guardian_address: Address
   guardian_birth_date: string
   patient_full_name: string
   patient_birth_date: string

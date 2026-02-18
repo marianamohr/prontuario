@@ -34,7 +34,7 @@ func TestTenantIsolation(t *testing.T) {
 	}
 
 	// Cria paciente na clínica A
-	patientA, err := CreatePatient(ctx, pool, clinicA, "Paciente Isolamento Test", nil, nil)
+	patientA, err := CreatePatient(ctx, pool, clinicA, "Paciente Isolamento Test", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePatient: %v", err)
 	}

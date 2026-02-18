@@ -61,7 +61,7 @@ func GetProfessionalInviteByToken(ctx context.Context, pool *pgxpool.Pool, token
 	return &inv, nil
 }
 
-func AcceptProfessionalInvite(ctx context.Context, pool *pgxpool.Pool, inviteID uuid.UUID, passwordHash string, fullName string, tradeName string, birthDate *string, cpfEncrypted, cpfNonce []byte, cpfKeyVersion *string, cpfHash, address, maritalStatus *string) error {
+func AcceptProfessionalInvite(ctx context.Context, pool *pgxpool.Pool, inviteID uuid.UUID, passwordHash string, fullName string, tradeName string, birthDate *string, cpfEncrypted, cpfNonce []byte, cpfKeyVersion *string, cpfHash *string, addressID *uuid.UUID, maritalStatus *string) error {
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -82,9 +82,9 @@ func AcceptProfessionalInvite(ctx context.Context, pool *pgxpool.Pool, inviteID 
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO professionals (clinic_id, email, password_hash, full_name, trade_name, status, birth_date, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address, marital_status)
+		INSERT INTO professionals (clinic_id, email, password_hash, full_name, trade_name, status, birth_date, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, marital_status)
 		VALUES ($1, $2, $3, $4, $5, 'ACTIVE', $6, $7, $8, $9, $10, $11, $12)
-	`, clinicID, email, passwordHash, fullName, tradeName, birthDate, cpfEncrypted, cpfNonce, cpfKeyVersion, cpfHash, address, maritalStatus)
+	`, clinicID, email, passwordHash, fullName, tradeName, birthDate, cpfEncrypted, cpfNonce, cpfKeyVersion, cpfHash, addressID, maritalStatus)
 	if err != nil {
 		return err
 	}
