@@ -106,7 +106,7 @@ openssl rand -base64 32
 3. **Variables** (importante no **build**):
    - **Build** (ou Variables do serviço):
      - `VITE_API_URL` = URL pública do backend (ex.: `https://seu-backend.up.railway.app`).
-   - Não é necessário `PORT`; o Dockerfile expõe 80.
+   - Não definir `PORT` manualmente; o Railway injeta e o container (nginx) escuta nessa porta.
 4. **Deploy**: anote a URL do frontend e use-a em `CORS_ORIGINS` e `APP_PUBLIC_URL` do backend (e atualize o backend se ainda não tiver).
 
 ---
