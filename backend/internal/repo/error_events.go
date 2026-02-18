@@ -31,7 +31,11 @@ type ErrorEvent struct {
 func CreateErrorEvent(ctx context.Context, pool *pgxpool.Pool, ev ErrorEvent) error {
 	var meta []byte
 	if ev.Metadata != nil {
-		meta, _ = json.Marshal(ev.Metadata)
+		var err error
+		meta, err = json.Marshal(ev.Metadata)
+		if err != nil {
+			return err
+		}
 	}
 	_, err := pool.Exec(ctx, `
 		INSERT INTO error_events (

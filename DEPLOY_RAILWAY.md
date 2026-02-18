@@ -103,9 +103,9 @@ openssl rand -base64 32
 2. No serviço:
    - **Settings** → **Root Directory**: `frontend`.
    - O build usa o `frontend/Dockerfile` (Nginx servindo o build do Vite).
-3. **Variables** (importante no **build**):
-   - **Build** (ou Variables do serviço):
-     - `VITE_API_URL` = URL pública do backend (ex.: `https://seu-backend.up.railway.app`).
+3. **Variables** (obrigatório no **build**):
+   - **VITE_API_URL** = URL pública do backend **sem barra no final** (ex.: `https://seu-backend.up.railway.app`).
+     - Se não for definida, o front chama a API na mesma URL do front (nginx), que retorna **405 Not Allowed** no login e em outras requisições POST/GET à API. É necessário **redeploy** do front após definir ou alterar essa variável (ela é embutida no build).
    - Não definir `PORT` manualmente; o Railway injeta e o container (nginx) escuta nessa porta.
 4. **Deploy**: anote a URL do frontend e use-a em `CORS_ORIGINS` e `APP_PUBLIC_URL` do backend (e atualize o backend se ainda não tiver).
 
@@ -175,8 +175,13 @@ Este serviço roda **uma vez por dia** (ex.: 08:00 BRT = 11:00 UTC) e encerra ap
 ## Troubleshooting
 
 - **Backend não sobe**: confira `DATABASE_URL` e se o Postgres está no mesmo projeto. Veja logs do serviço.
+- **"Failed to fetch" ao fazer login**: quase sempre é **CORS** ou **URL da API**.
+  1. **Backend** → Variables: `CORS_ORIGINS` deve conter **exatamente** a URL do frontend, sem barra no final (ex.: `https://front-production-df80.up.railway.app`). Se tiver mais de uma origem, separar por vírgula. O navegador envia o header `Origin` e o backend só aceita se estiver nessa lista.
+  2. **Frontend** → Variables (no **build**): `VITE_API_URL` = URL do backend, sem barra no final (ex.: `https://backend-production-xxxx.up.railway.app`). Depois de alterar, é obrigatório **redeploy** do front (a variável é embutida no build).
+  3. Confirme que o backend está no ar (`GET https://seu-backend.up.railway.app/health`).
+- **405 Not Allowed ao fazer login (ou em outras chamadas à API)**: o front está mandando as requisições para o próprio domínio do front (nginx). Defina **VITE_API_URL** no serviço do frontend com a URL do backend (ex.: `https://seu-backend.up.railway.app`) e faça um **novo deploy** do front (a variável é usada no build).
 - **Frontend em branco ou 404**: confirme `VITE_API_URL` no **build** (não só em runtime). Rebuild após alterar.
-- **CORS**: inclua exatamente a URL do frontend (com protocolo) em `CORS_ORIGINS`.
+- **CORS**: inclua exatamente a URL do frontend (com protocolo, sem barra no final) em `CORS_ORIGINS` do backend.
 - **Reminder não roda**: confirme Cron Schedule em UTC; confira **Dockerfile Path** = `Dockerfile.reminder` e que o binário termina (não fica em loop). Veja logs do serviço no horário do cron.
 - **WhatsApp não envia**: verifique `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` e `TWILIO_WHATSAPP_FROM` no serviço Reminder; número no formato esperado pelo Twilio (ex.: `whatsapp:+5511999999999`).
 

@@ -189,7 +189,10 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 		"template_version":  c.TemplateVersion,
 		"pdf_sha256":        pdfSHA256,
 	})
-	_ = errMarshal
+	if errMarshal != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
 
 	pdfURL := ""
 	if h.Cfg.AppPublicURL != "" {
