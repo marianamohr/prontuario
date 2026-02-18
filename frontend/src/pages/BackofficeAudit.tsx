@@ -57,8 +57,9 @@ export function BackofficeAudit() {
       severity: severity || undefined,
     })
       .then((r) => {
-        setItems(reset ? r.items : [...items, ...r.items])
-        setOffset(nextOffset + r.items.length)
+        const list = r?.items ?? []
+        setItems(reset ? list : [...items, ...list])
+        setOffset(nextOffset + list.length)
       })
       .catch((e) => setError((e as Error)?.message || 'Falha ao carregar auditoria.'))
       .finally(() => setLoading(false))
