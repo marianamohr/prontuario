@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"github.com/prontuario/backend/internal/auth"
 	"github.com/prontuario/backend/internal/crypto"
 	"github.com/prontuario/backend/internal/repo"
@@ -61,6 +62,93 @@ func (h *Handler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		"invite_id":  inv.ID.String(),
 		"expires_at": inv.ExpiresAt,
 	})
+}
+
+// ListInvites returns all professional invites for backoffice (super admin only).
+func (h *Handler) ListInvites(w http.ResponseWriter, r *http.Request) {
+	if !auth.IsSuperAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	list, err := repo.ListProfessionalInvites(r.Context(), h.Pool)
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(list))
+	for _, inv := range list {
+		out = append(out, map[string]interface{}{
+			"id":         inv.ID.String(),
+			"email":      inv.Email,
+			"full_name":  inv.FullName,
+			"status":     inv.Status,
+			"expires_at": inv.ExpiresAt,
+			"created_at": inv.CreatedAt,
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// DeleteInvite removes a professional invite by id (super admin only).
+func (h *Handler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
+	if !auth.IsSuperAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	idStr := mux.Vars(r)["id"]
+	if idStr == "" {
+		http.Error(w, `{"error":"id required"}`, http.StatusBadRequest)
+		return
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	if err := repo.DeleteProfessionalInvite(r.Context(), h.Pool, id); err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Convite removido."})
+}
+
+// ResendInvite sends the invite email again for a PENDING, non-expired invite (super admin only).
+func (h *Handler) ResendInvite(w http.ResponseWriter, r *http.Request) {
+	if !auth.IsSuperAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	idStr := mux.Vars(r)["id"]
+	if idStr == "" {
+		http.Error(w, `{"error":"id required"}`, http.StatusBadRequest)
+		return
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
+		return
+	}
+	inv, err := repo.GetProfessionalInviteByID(r.Context(), h.Pool, id)
+	if err != nil {
+		http.Error(w, `{"error":"invite not found"}`, http.StatusNotFound)
+		return
+	}
+	if inv.Status != "PENDING" {
+		http.Error(w, `{"error":"só é possível reenviar convite pendente"}`, http.StatusBadRequest)
+		return
+	}
+	if inv.ExpiresAt.Before(time.Now()) {
+		http.Error(w, `{"error":"convite expirado"}`, http.StatusBadRequest)
+		return
+	}
+	registerURL := h.Cfg.AppPublicURL + "/register?token=" + inv.Token
+	if h.sendInviteEmail != nil {
+		_ = h.sendInviteEmail(inv.Email, inv.FullName, registerURL)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Convite reenviado por e-mail."})
 }
 
 func (h *Handler) GetInviteByToken(w http.ResponseWriter, r *http.Request) {

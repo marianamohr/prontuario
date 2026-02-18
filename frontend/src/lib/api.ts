@@ -557,10 +557,35 @@ export function impersonateEnd() {
   return api<{ message: string }>('/api/backoffice/impersonate/end', { method: 'POST' })
 }
 
+export type BackofficeInviteItem = {
+  id: string
+  email: string
+  full_name: string
+  status: string
+  expires_at: string
+  created_at: string
+}
+
+export function listInvites() {
+  return api<BackofficeInviteItem[]>('/api/backoffice/invites', { method: 'GET' })
+}
+
 export function createInvite(email: string, full_name: string) {
   return api<{ message: string }>('/api/backoffice/invites', {
     method: 'POST',
     json: { email, full_name },
+  })
+}
+
+export function deleteInvite(id: string) {
+  return api<{ message: string }>(`/api/backoffice/invites/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function resendInvite(id: string) {
+  return api<{ message: string }>(`/api/backoffice/invites/${encodeURIComponent(id)}/resend`, {
+    method: 'POST',
   })
 }
 
