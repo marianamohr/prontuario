@@ -91,7 +91,8 @@ func AcceptProfessionalInvite(ctx context.Context, pool *pgxpool.Pool, inviteID 
 
 	// Atualiza o nome da clinic interna para refletir o nome fantasia (se informado).
 	if tradeName != "" {
-		_, _ = tx.Exec(ctx, `UPDATE clinics SET name = $1, updated_at = now() WHERE id = $2`, tradeName, clinicID)
+		_, errUpd := tx.Exec(ctx, `UPDATE clinics SET name = $1, updated_at = now() WHERE id = $2`, tradeName, clinicID)
+		_ = errUpd
 	}
 
 	_, err = tx.Exec(ctx, `

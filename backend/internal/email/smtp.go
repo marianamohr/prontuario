@@ -67,7 +67,9 @@ Se você não solicitou isso, ignore este e-mail.`
 		return err
 	}
 	var b bytes.Buffer
-	_ = t.Execute(&b, map[string]string{"ResetURL": resetURL})
+	if err := t.Execute(&b, map[string]string{"ResetURL": resetURL}); err != nil {
+		return err
+	}
 	return c.Send(to, "Redefinição de senha - Prontuário Saúde", b.String(), false)
 }
 
@@ -84,7 +86,9 @@ Se você não esperava este e-mail, ignore-o.`
 		return err
 	}
 	var b bytes.Buffer
-	_ = t.Execute(&b, map[string]string{"FullName": fullName, "SignURL": signURL})
+	if err := t.Execute(&b, map[string]string{"FullName": fullName, "SignURL": signURL}); err != nil {
+		return err
+	}
 	return c.Send(to, "Contrato para assinatura - Prontuário Saúde", b.String(), false)
 }
 
@@ -100,7 +104,9 @@ Se você tiver dúvidas, entre em contato com a clínica ou o profissional que a
 		return err
 	}
 	var b bytes.Buffer
-	_ = t.Execute(&b, map[string]string{"FullName": fullName})
+	if err := t.Execute(&b, map[string]string{"FullName": fullName}); err != nil {
+		return err
+	}
 	return c.Send(to, "Contrato cancelado - Prontuário Saúde", b.String(), false)
 }
 
@@ -116,7 +122,9 @@ Se você tiver dúvidas, entre em contato com a clínica ou o profissional que a
 		return err
 	}
 	var b bytes.Buffer
-	_ = t.Execute(&b, map[string]string{"FullName": fullName, "EndDate": endDate})
+	if err := t.Execute(&b, map[string]string{"FullName": fullName, "EndDate": endDate}); err != nil {
+		return err
+	}
 	return c.Send(to, "Contrato encerrado - Prontuário Saúde", b.String(), false)
 }
 
@@ -133,7 +141,9 @@ Este link expira em 7 dias. Se você não esperava este convite, ignore este e-m
 		return err
 	}
 	var b bytes.Buffer
-	_ = t.Execute(&b, map[string]string{"FullName": fullName, "RegisterURL": registerURL})
+	if err := t.Execute(&b, map[string]string{"FullName": fullName, "RegisterURL": registerURL}); err != nil {
+		return err
+	}
 	return c.Send(to, "Convite para cadastro - Prontuário Saúde", b.String(), false)
 }
 
@@ -153,7 +163,9 @@ Este link expira em 7 dias. Se você não esperava este e-mail, ignore.`
 		return err
 	}
 	var b bytes.Buffer
-	_ = t.Execute(&b, map[string]string{"FullName": fullName, "RegisterURL": registerURL})
+	if err := t.Execute(&b, map[string]string{"FullName": fullName, "RegisterURL": registerURL}); err != nil {
+		return err
+	}
 	return c.Send(to, "Convite para cadastro de paciente - Prontuário Saúde", b.String(), false)
 }
 

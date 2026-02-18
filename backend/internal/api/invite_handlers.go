@@ -79,7 +79,8 @@ func (h *Handler) GetInviteByToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var clinicName string
-	_ = h.Pool.QueryRow(r.Context(), "SELECT name FROM clinics WHERE id = $1", inv.ClinicID).Scan(&clinicName)
+	errSc := h.Pool.QueryRow(r.Context(), "SELECT name FROM clinics WHERE id = $1", inv.ClinicID).Scan(&clinicName)
+	_ = errSc
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"email":       inv.Email,

@@ -52,12 +52,13 @@ func Run(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) error {
 }
 
 func ensureSchemaMigrations(ctx context.Context, pool *pgxpool.Pool) {
-	pool.Exec(ctx, `
+	_, err := pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)
 	`)
+	_ = err
 }
 
 func appliedVersions(ctx context.Context, pool *pgxpool.Pool) (map[string]bool, error) {

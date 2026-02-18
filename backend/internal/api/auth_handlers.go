@@ -224,7 +224,7 @@ func (h *Handler) LoginSuperAdmin(w http.ResponseWriter, r *http.Request) {
 func genericLoginError(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"error":"invalid credentials"}`))
+	_, _ = w.Write([]byte(`{"error":"invalid credentials"}`))
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +333,7 @@ func (h *Handler) GetMyBranding(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
-	enc.Encode(map[string]interface{}{
+	_ = enc.Encode(map[string]interface{}{
 		"primary_color":         b.PrimaryColor,
 		"background_color":      b.BackgroundColor,
 		"home_label":            b.HomeLabel,

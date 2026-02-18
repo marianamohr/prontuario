@@ -102,7 +102,7 @@ func BuildContractPDF(bodyText string, block SignatureBlock) ([]byte, error) {
 			if err == nil {
 				_, _ = tmpFile.Write(qrPNG)
 				path := tmpFile.Name()
-				tmpFile.Close()
+				_ = tmpFile.Close()
 				defer os.Remove(path)
 				pdf.RegisterImage(path, "PNG")
 				pdf.Image(path, 15, pdf.GetY(), 30, 30, false, "", 0, "")
