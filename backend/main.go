@@ -120,12 +120,12 @@ func main() {
 			return mailCfg.SendContractEnded(to, fullName, endDate)
 		})
 		if cfg.SMTPUser == "" {
-			log.Printf("[email] SMTP configurado: %s:%s (sem autenticação). E-mails em dev: veja no MailHog http://localhost:8025", cfg.SMTPHost, cfg.SMTPPort)
+			log.Printf("[email] SMTP configured: %s:%s (no auth). Dev emails: see MailHog http://localhost:8025", cfg.SMTPHost, cfg.SMTPPort)
 		} else {
-			log.Printf("[email] SMTP configurado: %s:%s (autenticação ativa)", cfg.SMTPHost, cfg.SMTPPort)
+			log.Printf("[email] SMTP configured: %s:%s (auth enabled)", cfg.SMTPHost, cfg.SMTPPort)
 		}
 	} else {
-		log.Printf("[email] Envio de e-mail desativado: APP_PUBLIC_URL vazio. Defina APP_PUBLIC_URL para habilitar convites, reset de senha e contratos por e-mail.")
+		log.Printf("[email] Email sending disabled: APP_PUBLIC_URL empty. Set APP_PUBLIC_URL to enable invites, password reset and contracts by email.")
 	}
 	apiRouter := r.PathPrefix("/api").Subrouter()
 	apiRouter.HandleFunc("/auth/login", h.Login).Methods(http.MethodPost)

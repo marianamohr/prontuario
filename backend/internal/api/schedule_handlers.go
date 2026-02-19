@@ -218,10 +218,10 @@ func (h *Handler) PutScheduleConfig(w http.ResponseWriter, r *http.Request) {
 		h.Cache.Delete("schedule:" + clinicID.String())
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Configuração salva."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Schedule configuration saved."})
 }
 
-// CopyScheduleConfigDay copia a configuração de um dia para outro.
+// CopyScheduleConfigDay copies one day's schedule config to another.
 func (h *Handler) CopyScheduleConfigDay(w http.ResponseWriter, r *http.Request) {
 	if auth.RoleFrom(r.Context()) != auth.RoleProfessional && !auth.IsSuperAdmin(r.Context()) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
@@ -498,20 +498,20 @@ func (h *Handler) EndContract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.Status != "SIGNED" {
-		http.Error(w, `{"error":"só é possível encerrar contrato assinado"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"only signed contracts can be ended"}`, http.StatusBadRequest)
 		return
 	}
 	if err := repo.SetContractEndDate(r.Context(), h.Pool, contractID, clinicID, endDate); err != nil {
-		log.Printf("[end-contract] SetContractEndDate falhou: contract=%s clinic=%s err=%v", contractID, clinicID, err)
-		http.Error(w, `{"error":"não foi possível encerrar o contrato. Verifique se o status não foi alterado e tente novamente."}`, http.StatusBadRequest)
+		log.Printf("[end-contract] SetContractEndDate failed: contract=%s clinic=%s err=%v", contractID, clinicID, err)
+		http.Error(w, `{"error":"could not end contract. Check that status was not changed and try again."}`, http.StatusBadRequest)
 		return
 	}
 	cancelledIDs, errCancel := repo.CancelAppointmentsByContractFromDateIDs(r.Context(), h.Pool, contractID, endDate)
-	_ = errCancel // logado abaixo se len > 0; não falha a resposta
+	_ = errCancel // logged below if len > 0; does not fail the response
 	if len(cancelledIDs) > 0 {
-		log.Printf("[end-contract] %d agendamento(s) cancelado(s) a partir de %s", len(cancelledIDs), endDate.Format("02/01/2006"))
+		log.Printf("[end-contract] %d appointment(s) cancelled from %s", len(cancelledIDs), endDate.Format("02/01/2006"))
 	}
-	// Auditoria: contrato encerrado + batch de agendamentos alterados
+	// Audit: contract ended + batch of appointments updated
 	var actorID *uuid.UUID
 	if uid, e := uuid.Parse(auth.UserIDFrom(r.Context())); e == nil {
 		actorID = &uid
@@ -567,26 +567,26 @@ func (h *Handler) EndContract(w http.ResponseWriter, r *http.Request) {
 			Metadata:               map[string]interface{}{"contract_id": contractID.String(), "affected_ids": idStrs, "count": len(idStrs)},
 		})
 	}
-	// E-mail ao responsável: contrato encerrado (serviço prestado até a data)
+	// Email guardian: contract ended (service up to end date)
 	if h.sendContractEndedEmail != nil {
 		guardian, errG := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
 		if errG == nil {
 			endDateStr := endDate.Format("02/01/2006")
-			log.Printf("[end-contract] enviando notificação de encerramento para %s", guardian.Email)
+			log.Printf("[end-contract] sending end notification to %s", guardian.Email)
 			if err := h.sendContractEndedEmail(guardian.Email, guardian.FullName, endDateStr); err != nil {
-				log.Printf("[end-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
+				log.Printf("[end-contract] failed to send email to %s: %v", guardian.Email, err)
 			}
 		} else {
-			log.Printf("[end-contract] não foi possível obter responsável (legal_guardian_id=%s) para enviar e-mail: %v", c.LegalGuardianID, errG)
+			log.Printf("[end-contract] could not get guardian (legal_guardian_id=%s) to send email: %v", c.LegalGuardianID, errG)
 		}
 	} else {
-		log.Printf("[end-contract] envio desativado (contrato encerrado)")
+		log.Printf("[end-contract] email disabled (contract ended)")
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Contrato encerrado. Agendamentos a partir da data foram finalizados. O responsável foi notificado por e-mail."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Contract ended. Appointments from that date were finalized. Guardian was notified by email."})
 }
 
-// CreateAppointments cria um ou mais agendamentos vinculados a um contrato assinado.
+// CreateAppointments creates one or more appointments linked to a signed contract.
 func (h *Handler) CreateAppointments(w http.ResponseWriter, r *http.Request) {
 	if auth.RoleFrom(r.Context()) != auth.RoleProfessional && !auth.IsSuperAdmin(r.Context()) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)

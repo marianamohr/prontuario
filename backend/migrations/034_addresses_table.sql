@@ -1,4 +1,4 @@
--- Tabela de endereços (rua, numero, complemento, bairro, cidade, estado, pais, cep)
+-- Address table (street, number, complement, neighborhood, city, state, country, zip)
 CREATE TABLE IF NOT EXISTS addresses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   street TEXT,
@@ -12,12 +12,12 @@ CREATE TABLE IF NOT EXISTS addresses (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- FKs em legal_guardians, professionals e patients
+-- FKs in legal_guardians, professionals and patients
 ALTER TABLE legal_guardians ADD COLUMN IF NOT EXISTS address_id UUID REFERENCES addresses(id) ON DELETE SET NULL;
 ALTER TABLE professionals ADD COLUMN IF NOT EXISTS address_id UUID REFERENCES addresses(id) ON DELETE SET NULL;
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS address_id UUID REFERENCES addresses(id) ON DELETE SET NULL;
 
--- Migração de dados: legal_guardians (formato atual 6 linhas: rua, bairro, cidade, estado, pais, cep)
+-- Data migration: legal_guardians (current format 6 lines: street, neighborhood, city, state, country, zip)
 DO $$
 DECLARE
   r RECORD;
@@ -41,7 +41,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Migração de dados: professionals
+-- Data migration: professionals
 DO $$
 DECLARE
   r RECORD;
@@ -65,11 +65,11 @@ BEGIN
   END LOOP;
 END $$;
 
--- Remover coluna address
+-- Drop address column
 ALTER TABLE legal_guardians DROP COLUMN IF EXISTS address;
 ALTER TABLE professionals DROP COLUMN IF EXISTS address;
 
--- Índices para JOINs
+-- Indexes for JOINs
 CREATE INDEX IF NOT EXISTS idx_legal_guardians_address_id ON legal_guardians(address_id);
 CREATE INDEX IF NOT EXISTS idx_professionals_address_id ON professionals(address_id);
 CREATE INDEX IF NOT EXISTS idx_patients_address_id ON patients(address_id);

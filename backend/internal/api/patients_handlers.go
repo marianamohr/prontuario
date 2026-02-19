@@ -240,11 +240,11 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 	if req.PatientAddress != nil {
 		addrInput, err := parseAddressFromRequest(req.PatientAddress)
 		if err != nil {
-			http.Error(w, `{"error":"patient_address inválido: use objeto com 8 campos ou string de 8 linhas"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"patient_address invalid: use object with 8 fields or 8-line string"}`, http.StatusBadRequest)
 			return
 		}
 		if err := ValidateAddress(addrInput); err != nil {
-			http.Error(w, `{"error":"patient_address inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"patient_address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 			return
 		}
 		addr := AddressInputToRepo(addrInput)
@@ -272,7 +272,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		} else {
 			n := crypto.NormalizeCPF(s)
 			if len(n) != 11 {
-				http.Error(w, `{"error":"cpf do paciente inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid patient CPF"}`, http.StatusBadRequest)
 				return
 			}
 			cpfHash := crypto.CPFHash(n)
@@ -292,7 +292,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := repo.SetPatientCPF(r.Context(), h.Pool, p.ID, cid, enc, nonce, keyVer, cpfHash); err != nil {
 				if isUniqueViolation(err) {
-					http.Error(w, `{"error":"cpf já cadastrado para outro paciente"}`, http.StatusBadRequest)
+					http.Error(w, `{"error":"CPF already registered for another patient"}`, http.StatusBadRequest)
 					return
 				}
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -320,7 +320,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		if req.GuardianEmail != nil {
 			gEmail = strings.TrimSpace(*req.GuardianEmail)
 			if gEmail != "" && !emailRegex.MatchString(gEmail) {
-				http.Error(w, `{"error":"guardian_email inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid guardian_email"}`, http.StatusBadRequest)
 				return
 			}
 		}
@@ -328,11 +328,11 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		if req.GuardianAddress != nil {
 			addrInput, err := parseAddressFromRequest(req.GuardianAddress)
 			if err != nil {
-				http.Error(w, `{"error":"guardian_address inválido: use objeto com 8 campos ou string de 8 linhas"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"guardian_address invalid: use object with 8 fields or 8-line string"}`, http.StatusBadRequest)
 				return
 			}
 			if err := ValidateAddress(addrInput); err != nil {
-				http.Error(w, `{"error":"guardian_address inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"guardian_address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 				return
 			}
 			addr := AddressInputToRepo(addrInput)
@@ -366,7 +366,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		// Atualiza dados não sensíveis
 		if err := repo.UpdateLegalGuardian(r.Context(), h.Pool, g.ID, gFullName, gEmail, gAddrID, gBirth, gPhone, nil); err != nil {
 			if isUniqueViolation(err) {
-				http.Error(w, `{"error":"email já utilizado"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"email already in use"}`, http.StatusBadRequest)
 				return
 			}
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -376,7 +376,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		if req.GuardianCPF != nil && strings.TrimSpace(*req.GuardianCPF) != "" {
 			n := crypto.NormalizeCPF(*req.GuardianCPF)
 			if len(n) != 11 {
-				http.Error(w, `{"error":"cpf inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid CPF"}`, http.StatusBadRequest)
 				return
 			}
 			cpfHash := crypto.CPFHash(n)
@@ -396,7 +396,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := repo.UpdateLegalGuardianCPF(r.Context(), h.Pool, g.ID, enc, nonce, keyVer, cpfHash); err != nil {
 				if isUniqueViolation(err) {
-					http.Error(w, `{"error":"cpf já utilizado"}`, http.StatusBadRequest)
+					http.Error(w, `{"error":"CPF already in use"}`, http.StatusBadRequest)
 					return
 				}
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -446,7 +446,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.GuardianEmail != "" {
 		if !emailRegex.MatchString(strings.TrimSpace(req.GuardianEmail)) {
-			http.Error(w, `{"error":"guardian_email inválido"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid guardian_email"}`, http.StatusBadRequest)
 			return
 		}
 		if req.GuardianFullName == "" {
@@ -459,11 +459,11 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		}
 		guardianAddrInput, err := parseAddressFromRequest(req.GuardianAddress)
 		if err != nil {
-			http.Error(w, `{"error":"guardian_address required: use objeto com 8 campos ou string de 8 linhas (rua, numero, complemento, bairro, cidade, estado, pais, cep)"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"guardian_address required: use object with 8 fields or 8-line string (street, number, complement, neighborhood, city, state, country, zip)"}`, http.StatusBadRequest)
 			return
 		}
 		if err := ValidateAddress(guardianAddrInput); err != nil {
-			http.Error(w, `{"error":"guardian_address inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"guardian_address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 			return
 		}
 		if req.GuardianBirthDate == "" {
@@ -480,7 +480,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		}
 		n := crypto.NormalizeCPF(req.GuardianCPF)
 		if len(n) != 11 {
-			http.Error(w, `{"error":"cpf inválido"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid CPF"}`, http.StatusBadRequest)
 			return
 		}
 		cpfHash := crypto.CPFHash(n)
@@ -524,7 +524,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			Status:        "ACTIVE",
 		}
 		if err := repo.CreateLegalGuardian(r.Context(), h.Pool, g); err != nil {
-			http.Error(w, `{"error":"email já utilizado ou internal"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"email already in use or internal error"}`, http.StatusBadRequest)
 			return
 		}
 		var patientAddrID *uuid.UUID
@@ -548,7 +548,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			if s != "" {
 				n := crypto.NormalizeCPF(s)
 				if len(n) != 11 {
-					http.Error(w, `{"error":"cpf do paciente inválido"}`, http.StatusBadRequest)
+					http.Error(w, `{"error":"invalid patient CPF"}`, http.StatusBadRequest)
 					return
 				}
 				cpfHash := crypto.CPFHash(n)
@@ -568,7 +568,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 				}
 				if err := repo.SetPatientCPF(r.Context(), h.Pool, patientID, cid, enc, nonce, keyVer, cpfHash); err != nil {
 					if isUniqueViolation(err) {
-						http.Error(w, `{"error":"cpf já cadastrado para outro paciente"}`, http.StatusBadRequest)
+						http.Error(w, `{"error":"CPF already registered for another patient"}`, http.StatusBadRequest)
 						return
 					}
 					http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -604,7 +604,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		if s != "" {
 			n := crypto.NormalizeCPF(s)
 			if len(n) != 11 {
-				http.Error(w, `{"error":"cpf do paciente inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid patient CPF"}`, http.StatusBadRequest)
 				return
 			}
 			cpfHash := crypto.CPFHash(n)
@@ -624,7 +624,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := repo.SetPatientCPF(r.Context(), h.Pool, id, cid, enc, nonce, keyVer, cpfHash); err != nil {
 				if isUniqueViolation(err) {
-					http.Error(w, `{"error":"cpf já cadastrado para outro paciente"}`, http.StatusBadRequest)
+					http.Error(w, `{"error":"CPF already registered for another patient"}`, http.StatusBadRequest)
 					return
 				}
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -718,7 +718,7 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if strings.TrimSpace(req.Valor) == "" {
-		http.Error(w, `{"error":"valor é obrigatório"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"value is required"}`, http.StatusBadRequest)
 		return
 	}
 	guardianID, err := uuid.Parse(req.GuardianID)
@@ -890,18 +890,18 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 	}
 	signURL := h.Cfg.AppPublicURL + "/sign-contract?token=" + accessToken
 	if h.sendContractToSignEmail != nil {
-		log.Printf("[send-contract] enviando link de assinatura para %s", guardian.Email)
+		log.Printf("[send-contract] sending sign link to %s", guardian.Email)
 		if err := h.sendContractToSignEmail(guardian.Email, guardian.FullName, signURL); err != nil {
-			log.Printf("[send-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
+			log.Printf("[send-contract] failed to send email to %s: %v", guardian.Email, err)
 		}
 	} else {
-		log.Printf("[send-contract] envio desativado (destinatário seria %s); configure APP_PUBLIC_URL e SMTP", guardian.Email)
+		log.Printf("[send-contract] email disabled (would send to %s); set APP_PUBLIC_URL and SMTP", guardian.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato enviado por e-mail.", "contract_id": contractID.String()})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contract sent by email.", "contract_id": contractID.String()})
 }
 
-// GetContractPreviewByID retorna o body_html de um contrato existente (para preview na lista, inclusive cancelados/encerrados).
+// GetContractPreviewByID returns the body_html of an existing contract (for list preview, including cancelled/ended).
 func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request) {
 	if auth.RoleFrom(r.Context()) != auth.RoleProfessional && !auth.IsSuperAdmin(r.Context()) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
@@ -1228,18 +1228,18 @@ func (h *Handler) ResendContract(w http.ResponseWriter, r *http.Request) {
 		signURL = h.Cfg.AppPublicURL + "/sign-contract?token=" + accessToken
 	}
 	if h.sendContractToSignEmail != nil {
-		log.Printf("[resend-contract] reenviando link de assinatura para %s", guardian.Email)
+		log.Printf("[resend-contract] resending sign link to %s", guardian.Email)
 		if err := h.sendContractToSignEmail(guardian.Email, guardian.FullName, signURL); err != nil {
-			log.Printf("[resend-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
+			log.Printf("[resend-contract] failed to send email to %s: %v", guardian.Email, err)
 		}
 	} else {
-		log.Printf("[resend-contract] envio desativado (destinatário seria %s)", guardian.Email)
+		log.Printf("[resend-contract] email disabled (would send to %s)", guardian.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contrato reenviado por e-mail."})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": "Contract resent by email."})
 }
 
-// CancelContract cancela um contrato (PENDING ou SIGNED), marca como inativo e envia e-mail ao responsável.
+// CancelContract cancels a contract (PENDING or SIGNED), marks it inactive and emails the guardian.
 func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 	if auth.RoleFrom(r.Context()) != auth.RoleProfessional && !auth.IsSuperAdmin(r.Context()) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
@@ -1281,11 +1281,11 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.Status == "CANCELLED" {
-		http.Error(w, `{"error":"contrato já está cancelado"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"contract is already cancelled"}`, http.StatusBadRequest)
 		return
 	}
 	if c.Status != "PENDING" && c.Status != "SIGNED" {
-		http.Error(w, `{"error":"contrato já encerrado ou cancelado"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"contract already ended or cancelled"}`, http.StatusBadRequest)
 		return
 	}
 	guardian, err := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
@@ -1301,12 +1301,12 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	// Cancela os agendamentos vinculados a este contrato
+	// Cancel appointments linked to this contract
 	cancelledIDs, errAppt := repo.CancelAppointmentsByContractIDs(r.Context(), h.Pool, contractID)
 	if errAppt != nil {
-		log.Printf("[cancel-contract] falha ao cancelar agendamentos do contrato %s: %v", contractID, errAppt)
+		log.Printf("[cancel-contract] failed to cancel contract appointments %s: %v", contractID, errAppt)
 	}
-	// Auditoria: contrato cancelado + batch de agendamentos cancelados
+	// Audit: contract cancelled + batch of appointments cancelled
 	var actorID *uuid.UUID
 	if uid, e := uuid.Parse(auth.UserIDFrom(r.Context())); e == nil {
 		actorID = &uid
@@ -1363,20 +1363,20 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if h.sendContractCancelledEmail != nil {
-		log.Printf("[cancel-contract] enviando notificação de cancelamento para %s", guardian.Email)
+		log.Printf("[cancel-contract] sending cancellation notification to %s", guardian.Email)
 		if err := h.sendContractCancelledEmail(guardian.Email, guardian.FullName); err != nil {
-			log.Printf("[cancel-contract] falha ao enviar e-mail para %s: %v", guardian.Email, err)
+			log.Printf("[cancel-contract] failed to send email to %s: %v", guardian.Email, err)
 		}
 	} else {
-		log.Printf("[cancel-contract] envio desativado (destinatário seria %s)", guardian.Email)
+		log.Printf("[cancel-contract] email disabled (would send to %s)", guardian.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	msg := "Contrato cancelado. O responsável foi notificado por e-mail."
+	msg := "Contract cancelled. Guardian was notified by email."
 	if len(cancelledIDs) > 0 {
 		if len(cancelledIDs) == 1 {
-			msg = "Contrato cancelado. 1 agendamento vinculado foi cancelado. O responsável foi notificado por e-mail."
+			msg = "Contract cancelled. 1 linked appointment was cancelled. Guardian was notified by email."
 		} else {
-			msg = "Contrato cancelado. " + strconv.Itoa(len(cancelledIDs)) + " agendamentos vinculados foram cancelados. O responsável foi notificado por e-mail."
+			msg = "Contract cancelled. " + strconv.Itoa(len(cancelledIDs)) + " linked appointments were cancelled. Guardian was notified by email."
 		}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": msg})

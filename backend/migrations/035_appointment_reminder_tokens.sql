@@ -1,4 +1,4 @@
--- Tokens para confirmar presença e remarcar (enviados no lembrete WhatsApp)
+-- Tokens for attendance confirmation and reschedule (sent in WhatsApp reminder)
 CREATE TABLE IF NOT EXISTS appointment_reminder_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,

@@ -47,7 +47,7 @@ func (h *Handler) CreatePatientInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !emailRegex.MatchString(req.Email) {
-		http.Error(w, `{"error":"email inválido"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid email"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *Handler) CreatePatientInvite(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[patient-invite] falha ao enviar e-mail para %s: %v", req.Email, err)
 		}
 	} else {
-		log.Printf("[patient-invite] envio desativado (destinatário seria %s)", req.Email)
+		log.Printf("[patient-invite] email disabled (would send to %s)", req.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -138,11 +138,11 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 	// guardian_address: objeto (8 campos) ou string (8 linhas)
 	addrInput, err := parseAddressFromRequest(req.GuardianAddress)
 	if err != nil {
-		http.Error(w, `{"error":"guardian_address inválido: use objeto com 8 campos ou string de 8 linhas (rua, numero, complemento, bairro, cidade, estado, pais, cep)"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"guardian_address invalid: use object with 8 fields or 8-line string (street, number, complement, neighborhood, city, state, country, zip)"}`, http.StatusBadRequest)
 		return
 	}
 	if err := ValidateAddress(addrInput); err != nil {
-		http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -159,7 +159,7 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 	// Normaliza/valida CPF e prepara criptografia.
 	cpfNorm := crypto.NormalizeCPF(req.GuardianCPF)
 	if len(cpfNorm) != 11 {
-		http.Error(w, `{"error":"cpf inválido"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid CPF"}`, http.StatusBadRequest)
 		return
 	}
 	cpfHash := crypto.CPFHash(cpfNorm)

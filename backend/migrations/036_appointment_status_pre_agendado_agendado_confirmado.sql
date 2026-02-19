@@ -1,6 +1,6 @@
--- Novos status de appointment: PRE_AGENDADO, AGENDADO, CONFIRMADO (substituem PENDING_SIGNATURE e CONFIRMED)
+-- New appointment statuses: PRE_AGENDADO, AGENDADO, CONFIRMADO (replace PENDING_SIGNATURE and CONFIRMED)
 
--- Remover constraint antiga ANTES de migrar os dados (evita violar check ao fazer UPDATE)
+-- Drop old constraint BEFORE migrating data (avoids check violation on UPDATE)
 DO $$
 DECLARE
   r RECORD;
@@ -15,14 +15,14 @@ BEGIN
   END LOOP;
 END $$;
 
--- Migrar dados existentes
+-- Migrate existing data
 UPDATE appointments SET status = 'AGENDADO' WHERE status = 'PENDING_SIGNATURE';
 UPDATE appointments SET status = 'CONFIRMADO' WHERE status = 'CONFIRMED';
 
--- Nova constraint com os status válidos
+-- New constraint with valid statuses
 ALTER TABLE appointments ADD CONSTRAINT appointments_status_check CHECK (
   status IN ('PRE_AGENDADO', 'AGENDADO', 'CONFIRMADO', 'CANCELLED', 'COMPLETED', 'SERIES_ENDED')
 );
 
--- Default para novos registros (quando não informado)
+-- Default for new records (when not provided)
 ALTER TABLE appointments ALTER COLUMN status SET DEFAULT 'AGENDADO';

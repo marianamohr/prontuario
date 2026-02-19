@@ -10,31 +10,31 @@ import (
 	"github.com/prontuario/backend/internal/repo"
 )
 
-// GetRemarcarByToken retorna dados do compromisso e slots disponíveis para remarcação (público).
+// GetRemarcarByToken returns appointment data and available slots for reschedule (public).
 func (h *Handler) GetRemarcarByToken(w http.ResponseWriter, r *http.Request) {
 	token := mux.Vars(r)["token"]
 	if token == "" {
-		http.Error(w, `{"error":"token obrigatório"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
 	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.Pool, token)
 	if err != nil {
 		log.Printf("[remarcar] GetAppointmentByReminderToken: %v", err)
-		http.Error(w, `{"error":"erro interno"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
 	if info == nil {
-		http.Error(w, `{"error":"link inválido ou expirado"}`, http.StatusNotFound)
+		http.Error(w, `{"error":"link invalid or expired"}`, http.StatusNotFound)
 		return
 	}
-	// Slots disponíveis: próximos 14 dias a partir de amanhã
+	// Available slots: next 14 days starting tomorrow
 	loc, _ := time.LoadLocation("America/Sao_Paulo")
 	now := time.Now().In(loc)
 	tomorrow := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
 	endDate := tomorrow.AddDate(0, 0, 14)
 	slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.Pool, info.ProfessionalID, info.ClinicID, tomorrow, endDate, &info.AppointmentID)
 	if err != nil {
-		log.Printf("[remarcar] ListAvailableSlots: %v", err)
+		log.Printf("[remarcar] ListAvailableSlotsForProfessional: %v", err)
 		slots = nil
 	}
 	slotsOut := make([]map[string]string, len(slots))
@@ -52,31 +52,31 @@ func (h *Handler) GetRemarcarByToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ConfirmRemarcar registra confirmação de presença via token (público).
-// Só atualiza para CONFIRMADO quando o status atual for AGENDADO; se já for CONFIRMADO retorna sucesso; caso contrário 400.
+// ConfirmRemarcar records attendance confirmation via token (public).
+// Only updates to CONFIRMADO when current status is AGENDADO; if already CONFIRMADO returns success; otherwise 400.
 func (h *Handler) ConfirmRemarcar(w http.ResponseWriter, r *http.Request) {
 	token := mux.Vars(r)["token"]
 	if token == "" {
-		http.Error(w, `{"error":"token obrigatório"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
 	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.Pool, token)
 	if err != nil || info == nil {
-		http.Error(w, `{"error":"link inválido ou expirado"}`, http.StatusNotFound)
+		http.Error(w, `{"error":"link invalid or expired"}`, http.StatusNotFound)
 		return
 	}
 	switch info.Status {
 	case "CONFIRMADO":
-		// Idempotente: já confirmado
+		// Idempotent: already confirmed
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Presença confirmada."})
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Attendance confirmed."})
 		return
 	case "AGENDADO":
-		// Atualizar para CONFIRMADO
-		statusCONFIRMADO := "CONFIRMADO"
-		if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, nil, nil, nil, &statusCONFIRMADO, nil); err != nil {
+		// Update to CONFIRMADO
+		statusConfirmed := "CONFIRMADO"
+		if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, nil, nil, nil, &statusConfirmed, nil); err != nil {
 			log.Printf("[confirm-remarcar] UpdateAppointment: %v", err)
-			http.Error(w, `{"error":"falha ao confirmar"}`, http.StatusInternalServerError)
+			http.Error(w, `{"error":"failed to confirm"}`, http.StatusInternalServerError)
 			return
 		}
 		_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
@@ -90,24 +90,24 @@ func (h *Handler) ConfirmRemarcar(w http.ResponseWriter, r *http.Request) {
 			Metadata:     map[string]string{"guardian_id": info.GuardianID.String(), "via": "reminder_link"},
 		})
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Presença confirmada."})
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Attendance confirmed."})
 		return
 	default:
-		http.Error(w, `{"error":"Só é possível confirmar presença quando a consulta estiver agendada"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"attendance can only be confirmed when appointment is scheduled"}`, http.StatusBadRequest)
 		return
 	}
 }
 
-// RemarcarAppointment altera data/hora do compromisso via token (público).
+// RemarcarAppointment updates appointment date/time via token (public).
 func (h *Handler) RemarcarAppointment(w http.ResponseWriter, r *http.Request) {
 	token := mux.Vars(r)["token"]
 	if token == "" {
-		http.Error(w, `{"error":"token obrigatório"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
 	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.Pool, token)
 	if err != nil || info == nil {
-		http.Error(w, `{"error":"link inválido ou expirado"}`, http.StatusNotFound)
+		http.Error(w, `{"error":"link invalid or expired"}`, http.StatusNotFound)
 		return
 	}
 	var req struct {
@@ -115,28 +115,28 @@ func (h *Handler) RemarcarAppointment(w http.ResponseWriter, r *http.Request) {
 		StartTime       string `json:"start_time"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"corpo inválido"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
 		return
 	}
 	if req.AppointmentDate == "" || req.StartTime == "" {
-		http.Error(w, `{"error":"appointment_date e start_time são obrigatórios"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"appointment_date and start_time are required"}`, http.StatusBadRequest)
 		return
 	}
 	appointmentDate, err := time.Parse("2006-01-02", req.AppointmentDate)
 	if err != nil {
-		http.Error(w, `{"error":"data inválida"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid date"}`, http.StatusBadRequest)
 		return
 	}
 	startTime, err := time.Parse("15:04", req.StartTime)
 	if err != nil {
-		http.Error(w, `{"error":"horário inválido"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid time"}`, http.StatusBadRequest)
 		return
 	}
 	endTime := startTime.Add(50 * time.Minute)
-	statusAGENDADO := "AGENDADO"
-	if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, &appointmentDate, &startTime, &endTime, &statusAGENDADO, nil); err != nil {
+	statusAgendado := "AGENDADO"
+	if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, &appointmentDate, &startTime, &endTime, &statusAgendado, nil); err != nil {
 		log.Printf("[remarcar] UpdateAppointment: %v", err)
-		http.Error(w, `{"error":"falha ao atualizar"}`, http.StatusInternalServerError)
+		http.Error(w, `{"error":"failed to update"}`, http.StatusInternalServerError)
 		return
 	}
 	_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
@@ -155,5 +155,5 @@ func (h *Handler) RemarcarAppointment(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Consulta remarcada com sucesso."})
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Appointment rescheduled successfully."})
 }

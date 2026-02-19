@@ -58,7 +58,7 @@ func (s *Server) trigger(w http.ResponseWriter, r *http.Request) {
 	if idStr := r.URL.Query().Get("professional_id"); idStr != "" {
 		id, err := uuid.Parse(idStr)
 		if err != nil {
-			http.Error(w, `{"error":"professional_id inválido"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid professional_id"}`, http.StatusBadRequest)
 			return
 		}
 		professionalID = &id

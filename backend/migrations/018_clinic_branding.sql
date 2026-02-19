@@ -1,4 +1,4 @@
--- White-label: aparência da clínica (header, fundo, botão home)
+-- White-label: clinic appearance (header, background, home button)
 ALTER TABLE clinics
   ADD COLUMN IF NOT EXISTS primary_color TEXT,
   ADD COLUMN IF NOT EXISTS background_color TEXT,

@@ -1,5 +1,5 @@
--- Expande audit_events para suportar timeline completa (writes) com correlação por request_id
--- e cria error_events para logs de bugs/erros (frontend + backend), com retenção via job no backend.
+-- Expand audit_events to support full timeline (writes) with request_id correlation
+-- and create error_events for bug/error logs (frontend + backend), with retention via backend job.
 
 ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS clinic_id UUID REFERENCES clinics(id) ON DELETE SET NULL;
 ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS request_id TEXT;

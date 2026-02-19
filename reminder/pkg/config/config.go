@@ -14,8 +14,8 @@ type Config struct {
 	Port               string
 	APIKey             string
 	AppPublicURL       string
-	ReminderDaysAhead  int  // Quantos dias à frente enviar lembrete (mínimo 2).
-	AutoConfirm        bool // Se true, ao enviar lembrete atualiza AGENDADO -> CONFIRMADO.
+	ReminderDaysAhead  int  // Days ahead to send reminder (minimum 2).
+	AutoConfirm        bool // If true, when sending reminder updates AGENDADO -> CONFIRMADO.
 }
 
 // Load reads config from environment.

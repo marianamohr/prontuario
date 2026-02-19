@@ -16,7 +16,7 @@ const auditActionReminderSent = "APPOINTMENT_REMINDER_SENT"
 const auditSourceSystem = "SYSTEM"
 
 // WhatsAppSender sends a reminder to a phone number.
-// rescheduleURL: link para confirmar/remarcar; pode ser vazio.
+// rescheduleURL: link for confirm/reschedule; may be empty.
 type WhatsAppSender interface {
 	SendReminder(phone, patientName, dateStr, timeStr, rescheduleURL string) error
 }
@@ -29,7 +29,7 @@ type AppointmentLister interface {
 // SendAppointmentReminders loads appointments for the given date, then sends
 // one WhatsApp reminder per (appointment, guardian with phone).
 // If autoConfirm is true and appointment status is AGENDADO, updates it to CONFIRMADO after sending.
-// appPublicURL: base URL do frontend para links de remarcação (ex: https://app.example.com).
+// appPublicURL: frontend base URL for reschedule links (e.g. https://app.example.com).
 // If professionalID is non-nil, only that professional's appointments are sent.
 func SendAppointmentReminders(ctx context.Context, pool *pgxpool.Pool, date time.Time, sender WhatsAppSender, professionalID *uuid.UUID, appPublicURL string, autoConfirm bool) (sent int, skipped int) {
 	return SendAppointmentRemindersWithLister(ctx, pool, date, sender, nil, professionalID, appPublicURL, autoConfirm)

@@ -24,7 +24,7 @@ func main() {
 	if err := pool.Ping(ctx); err != nil {
 		log.Fatalf("ping: %v", err)
 	}
-	// Usa o mesmo banco do backend; migrations são aplicadas pelo backend.
+	// Uses the same database as the backend; migrations are applied by the backend.
 	srv := server.New(pool, cfg)
 	addr := ":" + cfg.Port
 	log.Printf("[reminder] listening on %s", addr)

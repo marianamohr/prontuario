@@ -16,7 +16,7 @@ func openPoolForScheduleTest(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return nil
 	}
 	pool, err := pgxpool.New(context.Background(), url)
@@ -34,14 +34,14 @@ func TestIntegration_UpdateAppointmentsStatusByContract(t *testing.T) {
 	}
 	defer pool.Close()
 
-	// Obter uma clínica e profissional e paciente existentes (seed)
+	// Get existing clinic, professional and patient (seed)
 	var clinicID, profID, patientID uuid.UUID
 	err := pool.QueryRow(ctx, `SELECT c.id, p.id, pt.id FROM clinics c
 		JOIN professionals p ON p.clinic_id = c.id
 		JOIN patients pt ON pt.clinic_id = c.id
 		LIMIT 1`).Scan(&clinicID, &profID, &patientID)
 	if err != nil {
-		t.Skipf("seed sem dados: %v", err)
+		t.Skipf("seed has no data: %v", err)
 		return
 	}
 	guardianID := uuid.Nil
@@ -51,7 +51,7 @@ func TestIntegration_UpdateAppointmentsStatusByContract(t *testing.T) {
 		return
 	}
 
-	// Criar contrato (e template se não existir)
+	// Create contract (and template if missing)
 	var templateID uuid.UUID
 	_ = pool.QueryRow(ctx, "SELECT id FROM contract_templates WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&templateID)
 	if templateID == uuid.Nil {
@@ -60,7 +60,7 @@ func TestIntegration_UpdateAppointmentsStatusByContract(t *testing.T) {
 			t.Fatalf("CreateContractTemplate: %v", err)
 		}
 	}
-	contractID, err := CreateContract(ctx, pool, clinicID, patientID, guardianID, &profID, templateID, "Responsável", false, 1, nil, nil, nil, nil, nil, nil, nil)
+	contractID, err := CreateContract(ctx, pool, clinicID, patientID, guardianID, &profID, templateID, "Guardian", false, 1, nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreateContract: %v", err)
 	}

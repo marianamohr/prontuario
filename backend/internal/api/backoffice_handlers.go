@@ -331,22 +331,22 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		e := strings.ToLower(strings.TrimSpace(*req.Email))
 		*req.Email = e
 		if e == "" {
-			http.Error(w, `{"error":"email inválido"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid email"}`, http.StatusBadRequest)
 			return
 		}
 		if !emailRegex.MatchString(e) {
-			http.Error(w, `{"error":"email inválido"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid email"}`, http.StatusBadRequest)
 			return
 		}
 	}
 	if req.FullName != nil && strings.TrimSpace(*req.FullName) == "" {
-		http.Error(w, `{"error":"full_name inválido"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid full_name"}`, http.StatusBadRequest)
 		return
 	}
 	if req.Status != nil {
 		s := strings.TrimSpace(*req.Status)
 		if s != "ACTIVE" && s != "SUSPENDED" && s != "CANCELLED" {
-			http.Error(w, `{"error":"status inválido"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid status"}`, http.StatusBadRequest)
 			return
 		}
 		*req.Status = s
@@ -374,12 +374,12 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		var clinicUUID *uuid.UUID
 		if req.ClinicID != nil {
 			if strings.TrimSpace(*req.ClinicID) == "" {
-				http.Error(w, `{"error":"clinic_id inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid clinic_id"}`, http.StatusBadRequest)
 				return
 			}
 			cid, err := uuid.Parse(strings.TrimSpace(*req.ClinicID))
 			if err != nil {
-				http.Error(w, `{"error":"clinic_id inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid clinic_id"}`, http.StatusBadRequest)
 				return
 			}
 			clinicUUID = &cid
@@ -391,7 +391,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		if req.CPF != nil && strings.TrimSpace(*req.CPF) != "" {
 			cpfNorm := crypto.NormalizeCPF(*req.CPF)
 			if len(cpfNorm) != 11 {
-				http.Error(w, `{"error":"cpf inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid CPF"}`, http.StatusBadRequest)
 				return
 			}
 			hh := crypto.CPFHash(cpfNorm)
@@ -427,7 +427,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 				Zip:          strFromPtr(req.Address.Zip),
 			}
 			if err := ValidateAddress(addrInput); err != nil {
-				http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 				return
 			}
 			addr := AddressInputToRepo(addrInput)
@@ -467,13 +467,13 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			}
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
-				log.Printf("[backoffice] patch user PROFESSIONAL falhou: id=%s code=%s msg=%s detail=%s", id.String(), pgErr.Code, pgErr.Message, pgErr.Detail)
+				log.Printf("[backoffice] patch user PROFESSIONAL failed: id=%s code=%s msg=%s detail=%s", id.String(), pgErr.Code, pgErr.Message, pgErr.Detail)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal", "detail": pgErr.Message})
 				return
 			}
-			log.Printf("[backoffice] patch user PROFESSIONAL falhou: id=%s err=%v", id.String(), err)
+			log.Printf("[backoffice] patch user PROFESSIONAL failed: id=%s err=%v", id.String(), err)
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
@@ -499,7 +499,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		if req.CPF != nil && strings.TrimSpace(*req.CPF) != "" {
 			cpfNorm := crypto.NormalizeCPF(*req.CPF)
 			if len(cpfNorm) != 11 {
-				http.Error(w, `{"error":"cpf inválido"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"invalid CPF"}`, http.StatusBadRequest)
 				return
 			}
 			hh := crypto.CPFHash(cpfNorm)
@@ -535,7 +535,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 				Zip:          strFromPtr(req.Address.Zip),
 			}
 			if err := ValidateAddress(addrInput); err != nil {
-				http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 				return
 			}
 			addr := AddressInputToRepo(addrInput)
@@ -573,13 +573,13 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			}
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) {
-				log.Printf("[backoffice] patch user LEGAL_GUARDIAN falhou: id=%s code=%s msg=%s detail=%s", id.String(), pgErr.Code, pgErr.Message, pgErr.Detail)
+				log.Printf("[backoffice] patch user LEGAL_GUARDIAN failed: id=%s code=%s msg=%s detail=%s", id.String(), pgErr.Code, pgErr.Message, pgErr.Detail)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal", "detail": pgErr.Message})
 				return
 			}
-			log.Printf("[backoffice] patch user LEGAL_GUARDIAN falhou: id=%s err=%v", id.String(), err)
+			log.Printf("[backoffice] patch user LEGAL_GUARDIAN failed: id=%s err=%v", id.String(), err)
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
@@ -633,7 +633,7 @@ func (h *Handler) TriggerReminder(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Printf("[backoffice] reminder trigger: %v", err)
-		http.Error(w, `{"error":"falha ao chamar serviço reminder"}`, http.StatusBadGateway)
+		http.Error(w, `{"error":"failed to call reminder service"}`, http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()

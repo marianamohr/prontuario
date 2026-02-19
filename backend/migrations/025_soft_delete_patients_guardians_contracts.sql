@@ -1,4 +1,4 @@
--- Soft delete: registros com deleted_at preenchido não aparecem para profissionais.
+-- Soft delete: records with deleted_at set do not appear to professionals.
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE legal_guardians ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;

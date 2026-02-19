@@ -1,5 +1,5 @@
--- Convites para cadastro de paciente/responsável via link (fluxo tipo invite).
--- O profissional envia e-mail + nome; o responsável completa CPF/endereço/datas no link.
+-- Invites for patient/guardian registration via link (invite-style flow).
+-- Professional sends email + name; guardian completes CPF/address/dates on the link.
 
 CREATE TABLE IF NOT EXISTS patient_invites (
   id uuid PRIMARY KEY,

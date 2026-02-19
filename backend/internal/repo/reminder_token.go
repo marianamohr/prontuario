@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ReminderTokenInfo retorna appointment + guardian válidos para um token.
+// ReminderTokenInfo holds valid appointment and guardian for a token.
 type ReminderTokenInfo struct {
 	AppointmentID   uuid.UUID
 	GuardianID      uuid.UUID
@@ -22,7 +22,7 @@ type ReminderTokenInfo struct {
 	Status          string
 }
 
-// GetAppointmentByReminderToken valida o token e retorna dados do compromisso. Retorna nil se inválido/expirado.
+// GetAppointmentByReminderToken validates the token and returns appointment data. Returns nil if invalid or expired.
 func GetAppointmentByReminderToken(ctx context.Context, pool *pgxpool.Pool, token string) (*ReminderTokenInfo, error) {
 	var r ReminderTokenInfo
 	err := pool.QueryRow(ctx, `
@@ -39,23 +39,18 @@ func GetAppointmentByReminderToken(ctx context.Context, pool *pgxpool.Pool, toke
 		}
 		return nil, err
 	}
-	// appointments doesn't have legal_guardian_id directly - we get guardian from patient_guardians
-	// Actually the token has guardian_id. We need to join to get the appointment. Let me fix the query.
-	// The appointment_reminder_tokens has appointment_id, guardian_id. Appointments has patient_id, not guardian_id.
-	// So we join: t -> appointments a, and we need to verify that guardian_id is a guardian of the patient.
-	// Simplified: we trust the token - if it exists and not expired, the (appointment_id, guardian_id) pair is valid.
-	// Let me fix the query - we don't have legal_guardian_id in appointments. The join is just t -> a.
+	// Token is trusted: if it exists and is not expired, the (appointment_id, guardian_id) pair is valid.
 	return &r, nil
 }
 
-// Slot disponível para remarcação.
+// AvailableSlot is a slot available for reschedule.
 type AvailableSlot struct {
 	Date      string // 2006-01-02
 	StartTime string // 15:04
 }
 
-// ListAvailableSlotsForProfessional retorna slots disponíveis para o profissional em [from, to].
-// excludeAppointmentID: se non-nil, exclui esse compromisso da lista de ocupados (para remarcação).
+// ListAvailableSlotsForProfessional returns available slots for the professional in [from, to].
+// excludeAppointmentID: if non-nil, excludes that appointment from occupied slots (for reschedule).
 func ListAvailableSlotsForProfessional(ctx context.Context, pool *pgxpool.Pool, professionalID, clinicID uuid.UUID, from, to time.Time, excludeAppointmentID *uuid.UUID) ([]AvailableSlot, error) {
 	configs, err := ListScheduleConfig(ctx, pool, clinicID)
 	if err != nil {

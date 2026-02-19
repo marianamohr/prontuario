@@ -40,16 +40,16 @@ func (h *Handler) GuardianRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !emailRegex.MatchString(strings.TrimSpace(req.Email)) {
-		http.Error(w, `{"error":"email inválido"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid email"}`, http.StatusBadRequest)
 		return
 	}
 	if strings.TrimSpace(req.CPF) == "" {
-		http.Error(w, `{"error":"cpf obrigatório"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"CPF required"}`, http.StatusBadRequest)
 		return
 	}
 	cpfNorm := crypto.NormalizeCPF(req.CPF)
 	if len(cpfNorm) != 11 {
-		http.Error(w, `{"error":"cpf inválido"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"invalid CPF"}`, http.StatusBadRequest)
 		return
 	}
 	cpfHash := crypto.CPFHash(cpfNorm)

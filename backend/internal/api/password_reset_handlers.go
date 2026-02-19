@@ -37,7 +37,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 					log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
 				}
 			} else {
-				log.Printf("[password-reset] envio desativado (destinatário seria %s, tipo=PROFESSIONAL)", req.Email)
+				log.Printf("[password-reset] email disabled (would send to %s, type=PROFESSIONAL)", req.Email)
 			}
 		}
 	}
@@ -51,7 +51,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 					log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
 				}
 			} else {
-				log.Printf("[password-reset] envio desativado (destinatário seria %s, tipo=SUPER_ADMIN)", req.Email)
+				log.Printf("[password-reset] email disabled (would send to %s, type=SUPER_ADMIN)", req.Email)
 			}
 		}
 	}
@@ -65,7 +65,7 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 					log.Printf("[password-reset] falha ao enviar e-mail para %s: %v", req.Email, errSend)
 				}
 			} else {
-				log.Printf("[password-reset] envio desativado (destinatário seria %s, tipo=LEGAL_GUARDIAN)", req.Email)
+				log.Printf("[password-reset] email disabled (would send to %s, type=LEGAL_GUARDIAN)", req.Email)
 			}
 		}
 	}
@@ -114,5 +114,5 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"message":"Senha alterada com sucesso."}`))
+	_, _ = w.Write([]byte(`{"message":"Password changed successfully."}`))
 }

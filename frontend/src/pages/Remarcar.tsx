@@ -41,7 +41,7 @@ export function Remarcar() {
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedTime, setSelectedTime] = useState('')
   const [confirming, setConfirming] = useState(false)
-  const [remarcando, setRemarcando] = useState(false)
+  const [rescheduling, setRescheduling] = useState(false)
 
   useEffect(() => {
     if (!token) {
@@ -63,7 +63,7 @@ export function Remarcar() {
   const slotsForDate = (data?.slots ?? []).filter((s) => s.date === selectedDate)
   const timesForDate = [...new Set(slotsForDate.map((s) => s.start_time))].sort()
 
-  const handleConfirmar = async () => {
+  const handleConfirm = async () => {
     if (!token) return
     setConfirming(true)
     setError('')
@@ -78,9 +78,9 @@ export function Remarcar() {
     }
   }
 
-  const handleRemarcar = async () => {
+  const handleReschedule = async () => {
     if (!token || !selectedDate || !selectedTime) return
-    setRemarcando(true)
+    setRescheduling(true)
     setError('')
     setSuccess('')
     try {
@@ -89,7 +89,7 @@ export function Remarcar() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao remarcar.')
     } finally {
-      setRemarcando(false)
+      setRescheduling(false)
     }
   }
 
@@ -114,7 +114,7 @@ export function Remarcar() {
     )
   }
 
-  const isConfirmado = data.status === 'CONFIRMADO'
+  const isConfirmed = data.status === 'CONFIRMADO'
 
   return (
     <Box sx={{ maxWidth: 520, mx: 'auto', p: 2 }}>
@@ -131,14 +131,14 @@ export function Remarcar() {
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" sx={{ mb: 1 }}>Confirmar presença</Typography>
-        {isConfirmado ? (
+        {isConfirmed ? (
           <Typography variant="body2" color="text.secondary">Presença já confirmada.</Typography>
         ) : (
           <>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Confirme que comparecerá na data e horário atuais.
             </Typography>
-            <Button variant="contained" onClick={handleConfirmar} disabled={confirming}>
+            <Button variant="contained" onClick={handleConfirm} disabled={confirming}>
               {confirming ? 'Confirmando...' : 'Confirmar presença'}
             </Button>
           </>
@@ -186,11 +186,11 @@ export function Remarcar() {
         </Box>
         <Button
           variant="outlined"
-          onClick={handleRemarcar}
-          disabled={remarcando || !selectedDate || !selectedTime}
+          onClick={handleReschedule}
+          disabled={rescheduling || !selectedDate || !selectedTime}
           sx={{ mt: 2 }}
         >
-          {remarcando ? 'Remarcando...' : 'Remarcar'}
+          {rescheduling ? 'Remarcando...' : 'Remarcar'}
         </Button>
       </Paper>
 

@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// CreateReminderToken cria token para confirmar/remarcar (válido 7 dias).
+// CreateReminderToken creates a token for confirm/reschedule (valid 7 days).
 func CreateReminderToken(ctx context.Context, pool *pgxpool.Pool, appointmentID, guardianID uuid.UUID) (string, error) {
 	token := uuid.New().String()
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)

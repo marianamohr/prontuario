@@ -1,4 +1,4 @@
--- Cores dos botões de ação (aceitar/submeter) e negação (excluir/cancelar)
+-- Action (accept/submit) and negation (delete/cancel) button colors
 ALTER TABLE clinics
   ADD COLUMN IF NOT EXISTS action_button_color TEXT,
   ADD COLUMN IF NOT EXISTS negation_button_color TEXT;

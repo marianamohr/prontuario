@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ScheduleConfig é a configuração de agenda de um dia da semana (day_of_week 0=domingo .. 6=sábado).
-// Enabled: só dias com enabled=true aparecem para configurar e na agenda.
+// ScheduleConfig is the schedule configuration for one weekday (day_of_week 0=Sunday .. 6=Saturday).
+// Enabled: only days with enabled=true are shown for configuration and on the agenda.
 type ScheduleConfig struct {
 	ClinicID                    uuid.UUID
 	DayOfWeek                   int
@@ -126,7 +126,7 @@ func CopyScheduleConfigDay(ctx context.Context, pool *pgxpool.Pool, clinicID uui
 	return UpsertScheduleConfig(ctx, pool, toC)
 }
 
-// ContractScheduleRule é uma regra de pré-agendamento no contrato (ex.: dia 2 = terça, 15:00).
+// ContractScheduleRule is a pre-schedule rule on the contract (e.g. day 2 = Tuesday, 15:00).
 type ContractScheduleRule struct {
 	ID         uuid.UUID
 	ContractID uuid.UUID
@@ -170,7 +170,7 @@ func ListContractScheduleRules(ctx context.Context, pool *pgxpool.Pool, contract
 	return list, rows.Err()
 }
 
-// Appointment é um compromisso na agenda.
+// Appointment is an agenda appointment.
 type Appointment struct {
 	ID              uuid.UUID
 	ClinicID        uuid.UUID
@@ -211,7 +211,7 @@ func ListAppointmentsByClinicAndDateRange(ctx context.Context, pool *pgxpool.Poo
 	return scanAppointments(rows)
 }
 
-// AppointmentWithPatientName é um compromisso com o nome do paciente (para exibição na agenda).
+// AppointmentWithPatientName is an appointment with patient name (for agenda display).
 type AppointmentWithPatientName struct {
 	Appointment
 	PatientName string
@@ -273,8 +273,8 @@ func UpdateAppointment(ctx context.Context, pool *pgxpool.Pool, id, clinicID uui
 	return err
 }
 
-// CancelAppointmentsByContractFromDate cancela agendamentos com data APÓS a data de término.
-// Ex.: encerramento em 15/02 → mantém 14/02 e 15/02, cancela 16/02 em diante.
+// CancelAppointmentsByContractFromDate cancels appointments with date after the end date.
+// E.g. end on 15/02 keeps 14/02 and 15/02, cancels 16/02 onward.
 func CancelAppointmentsByContractFromDate(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID, endDate time.Time) (int64, error) {
 	endDateStr := endDate.Format("2006-01-02")
 	result, err := pool.Exec(ctx, `
@@ -287,7 +287,7 @@ func CancelAppointmentsByContractFromDate(ctx context.Context, pool *pgxpool.Poo
 	return result.RowsAffected(), nil
 }
 
-// CancelAppointmentsByContractFromDateIDs cancela agendamentos e retorna os IDs alterados.
+// CancelAppointmentsByContractFromDateIDs cancels appointments and returns the affected IDs.
 func CancelAppointmentsByContractFromDateIDs(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID, endDate time.Time) ([]uuid.UUID, error) {
 	endDateStr := endDate.Format("2006-01-02")
 	rows, err := pool.Query(ctx, `
@@ -311,7 +311,7 @@ func CancelAppointmentsByContractFromDateIDs(ctx context.Context, pool *pgxpool.
 	return ids, rows.Err()
 }
 
-// CancelAppointmentsByContract marca como CANCELLED todos os agendamentos vinculados ao contrato (exceto já concluídos).
+// CancelAppointmentsByContract marks as CANCELLED all appointments linked to the contract (except already completed).
 func CancelAppointmentsByContract(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID) (int64, error) {
 	result, err := pool.Exec(ctx, `
 		UPDATE appointments SET status = 'CANCELLED', updated_at = now()
@@ -323,7 +323,7 @@ func CancelAppointmentsByContract(ctx context.Context, pool *pgxpool.Pool, contr
 	return result.RowsAffected(), nil
 }
 
-// CancelAppointmentsByContractIDs marca como CANCELLED e retorna os IDs alterados.
+// CancelAppointmentsByContractIDs marks as CANCELLED and returns the affected IDs.
 func CancelAppointmentsByContractIDs(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := pool.Query(ctx, `
 		UPDATE appointments
@@ -346,7 +346,7 @@ func CancelAppointmentsByContractIDs(ctx context.Context, pool *pgxpool.Pool, co
 	return ids, rows.Err()
 }
 
-// UpdateAppointmentsStatusByContract atualiza o status dos appointments de um contrato (ex.: PRE_AGENDADO -> AGENDADO na assinatura).
+// UpdateAppointmentsStatusByContract updates appointment status for a contract (e.g. PRE_AGENDADO -> AGENDADO on sign).
 func UpdateAppointmentsStatusByContract(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID, newStatus string) (int64, error) {
 	result, err := pool.Exec(ctx, `
 		UPDATE appointments SET status = $1, updated_at = now()
@@ -358,19 +358,19 @@ func UpdateAppointmentsStatusByContract(ctx context.Context, pool *pgxpool.Pool,
 	return result.RowsAffected(), nil
 }
 
-// CreateAppointmentsFromContractRules gera os compromissos a partir das regras do contrato, do startDate ao endDate (inclusive).
-// Os agendamentos são criados com contract_id preenchido (obrigatório para cancelamento ao encerrar contrato).
-// professionalID e clinicID vêm do contrato; durationMinutos é usado para end_time (start + duration).
-// maxAppointments: se > 0, cria no máximo esse número de agendamentos; 0 = sem limite.
+// CreateAppointmentsFromContractRules creates appointments from contract rules, from startDate to endDate (inclusive).
+// Appointments are created with contract_id set (required for cancellation when ending contract).
+// professionalID and clinicID come from the contract; durationMinutes is used for end_time (start + duration).
+// maxAppointments: if > 0, creates at most that many appointments; 0 = no limit.
 func CreateAppointmentsFromContractRules(ctx context.Context, pool *pgxpool.Pool, contractID, clinicID, professionalID, patientID uuid.UUID, startDate, endDate time.Time, durationMinutes int, maxAppointments int) error {
 	return CreateAppointmentsFromContractRulesWithStatus(ctx, pool, contractID, clinicID, professionalID, patientID, startDate, endDate, durationMinutes, maxAppointments, "AGENDADO")
 }
 
-// CreateAppointmentsFromContractRulesWithStatus cria compromissos a partir das regras do contrato com o status informado.
-// Usado no envio do contrato (PRE_AGENDADO) ou em fluxos que precisam de outro status.
+// CreateAppointmentsFromContractRulesWithStatus creates appointments from contract rules with the given status.
+// Used when sending contract (PRE_AGENDADO) or in flows that need another status.
 func CreateAppointmentsFromContractRulesWithStatus(ctx context.Context, pool *pgxpool.Pool, contractID, clinicID, professionalID, patientID uuid.UUID, startDate, endDate time.Time, durationMinutes int, maxAppointments int, status string) error {
 	if contractID == uuid.Nil {
-		return fmt.Errorf("contract_id é obrigatório")
+		return fmt.Errorf("contract_id is required")
 	}
 	rules, err := ListContractScheduleRules(ctx, pool, contractID)
 	if err != nil || len(rules) == 0 {

@@ -60,7 +60,7 @@ func (h *Handler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[invite] falha ao enviar e-mail para %s: %v", req.Email, err)
 		}
 	} else {
-		log.Printf("[invite] convite criado para %s mas envio de e-mail desativado (SMTP/APP_PUBLIC_URL)", req.Email)
+		log.Printf("[invite] invite created for %s but email disabled (SMTP/APP_PUBLIC_URL)", req.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -162,7 +162,7 @@ func (h *Handler) ResendInvite(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[invite] falha ao reenviar e-mail para %s: %v", inv.Email, err)
 		}
 	} else {
-		log.Printf("[invite] reenvio desativado (destinatário seria %s); configure APP_PUBLIC_URL e SMTP", inv.Email)
+		log.Printf("[invite] resend disabled (would send to %s); set APP_PUBLIC_URL and SMTP", inv.Email)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Convite reenviado por e-mail."})
@@ -202,7 +202,7 @@ type AcceptInviteRequest struct {
 	TradeName     string      `json:"trade_name"`
 	BirthDate     *string     `json:"birth_date"`
 	CPF           string      `json:"cpf"`
-	Address       interface{} `json:"address"` // objeto (8 campos) ou string (8 linhas) — obrigatório
+	Address       interface{} `json:"address"` // object (8 fields) or string (8 lines) — required
 	MaritalStatus string      `json:"marital_status"`
 }
 
@@ -222,11 +222,11 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	addrInput, err := parseAddressFromRequest(req.Address)
 	if err != nil {
-		http.Error(w, `{"error":"endereço obrigatório: use objeto com 8 campos ou string de 8 linhas (rua, numero, complemento, bairro, cidade, estado, pais, cep)"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"address required: use object with 8 fields or 8-line string (street, number, complement, neighborhood, city, state, country, zip)"}`, http.StatusBadRequest)
 		return
 	}
 	if err := ValidateAddress(addrInput); err != nil {
-		http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 		return
 	}
 	inv, err := repo.GetProfessionalInviteByToken(r.Context(), h.Pool, req.Token)

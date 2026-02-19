@@ -51,7 +51,7 @@ func TestIntegration_TenantIsolation_ListPatients(t *testing.T) {
 	ctx := context.Background()
 	pool, url := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada para testes de integração")
+		t.Skip("DATABASE_URL not set for integration tests")
 		return
 	}
 	defer pool.Close()
@@ -69,7 +69,7 @@ func TestIntegration_TenantIsolation_ListPatients(t *testing.T) {
 	clinicA, profA := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	clinicB, profB := getClinicAndProfessionalID(ctx, pool, "profb@clinica-b.local")
 	if clinicA == uuid.Nil || clinicB == uuid.Nil || profA == uuid.Nil || profB == uuid.Nil {
-		t.Fatal("seed não criou profissionais esperados")
+		t.Fatal("seed did not create expected professionals")
 	}
 
 	srv := newAPIRouterForPatients(h, jwtSecret)
@@ -113,7 +113,7 @@ func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada para testes de integração")
+		t.Skip("DATABASE_URL not set for integration tests")
 		return
 	}
 	defer pool.Close()
@@ -128,7 +128,7 @@ func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 
 	clinicA, profA := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	if clinicA == uuid.Nil || profA == uuid.Nil {
-		t.Fatal("seed não criou profissional A")
+		t.Fatal("seed did not create professional A")
 	}
 	authz := authHeaderForProfessional(t, jwtSecret, profA, clinicA)
 

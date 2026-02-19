@@ -38,7 +38,7 @@ func TestIntegration_GetAvailableSlots_WithoutAuth_Returns401(t *testing.T) {
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return
 	}
 	defer pool.Close()
@@ -62,7 +62,7 @@ func TestIntegration_GetAvailableSlots_WithoutFromTo_Returns400(t *testing.T) {
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return
 	}
 	defer pool.Close()
@@ -76,7 +76,7 @@ func TestIntegration_GetAvailableSlots_WithoutFromTo_Returns400(t *testing.T) {
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
 	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	if profID == uuid.Nil {
-		t.Fatal("seed não criou profissional")
+		t.Fatal("seed did not create professional")
 	}
 	authz := authHeaderForProfessional(t, jwtSecret, profID, clinicID)
 
@@ -93,7 +93,7 @@ func TestIntegration_GetAvailableSlots_WithAuth_Returns200AndSlots(t *testing.T)
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return
 	}
 	defer pool.Close()
@@ -107,7 +107,7 @@ func TestIntegration_GetAvailableSlots_WithAuth_Returns200AndSlots(t *testing.T)
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
 	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	if profID == uuid.Nil {
-		t.Fatal("seed não criou profissional")
+		t.Fatal("seed did not create professional")
 	}
 	authz := authHeaderForProfessional(t, jwtSecret, profID, clinicID)
 
@@ -136,7 +136,7 @@ func TestIntegration_PatchAppointment_AcceptsNewStatuses(t *testing.T) {
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return
 	}
 	defer pool.Close()
@@ -150,7 +150,7 @@ func TestIntegration_PatchAppointment_AcceptsNewStatuses(t *testing.T) {
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
 	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	if profID == uuid.Nil {
-		t.Fatal("seed não criou profissional")
+		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
 	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {
@@ -188,11 +188,11 @@ func TestIntegration_PatchAppointment_AcceptsNewStatuses(t *testing.T) {
 }
 
 func TestIntegration_SendContract_WithScheduleRules_NoConfig_Returns400(t *testing.T) {
-	// Sem config de agenda, os slots disponíveis são vazios; enviar com schedule_rules deve retornar 400
+	// With no schedule config, available slots are empty; sending with schedule_rules should return 400
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return
 	}
 	defer pool.Close()
@@ -206,7 +206,7 @@ func TestIntegration_SendContract_WithScheduleRules_NoConfig_Returns400(t *testi
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
 	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	if profID == uuid.Nil {
-		t.Fatal("seed não criou profissional")
+		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
 	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {
@@ -218,7 +218,7 @@ func TestIntegration_SendContract_WithScheduleRules_NoConfig_Returns400(t *testi
 	}
 	var templateID uuid.UUID
 	if err := pool.QueryRow(ctx, "SELECT id FROM contract_templates WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&templateID); err != nil {
-		t.Skip("clínica sem template; criar template no seed para testar send-contract")
+		t.Skip("clinic has no template; create template in seed to test send-contract")
 		return
 	}
 
@@ -251,7 +251,7 @@ func TestIntegration_ConfirmRemarcar_OnlyAgendadoBecomesConfirmado(t *testing.T)
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return
 	}
 	defer pool.Close()
@@ -260,7 +260,7 @@ func TestIntegration_ConfirmRemarcar_OnlyAgendadoBecomesConfirmado(t *testing.T)
 
 	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	if profID == uuid.Nil {
-		t.Fatal("seed não criou profissional")
+		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
 	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {
@@ -312,7 +312,7 @@ func TestIntegration_ConfirmRemarcar_PreAgendado_Returns400(t *testing.T) {
 	ctx := context.Background()
 	pool, _ := testutil.OpenPool(ctx)
 	if pool == nil {
-		t.Skip("DATABASE_URL não configurada")
+		t.Skip("DATABASE_URL not set")
 		return
 	}
 	defer pool.Close()
@@ -321,7 +321,7 @@ func TestIntegration_ConfirmRemarcar_PreAgendado_Returns400(t *testing.T) {
 
 	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
 	if profID == uuid.Nil {
-		t.Fatal("seed não criou profissional")
+		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
 	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {

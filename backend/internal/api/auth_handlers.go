@@ -521,7 +521,7 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	fullName := strings.TrimSpace(req.FullName)
 	if fullName == "" {
-		http.Error(w, `{"error":"full_name obrigatório"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"full_name required"}`, http.StatusBadRequest)
 		return
 	}
 	var tradeName *string
@@ -533,11 +533,11 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 	if req.Address != nil {
 		addrInput, err := parseAddressFromRequest(req.Address)
 		if err != nil {
-			http.Error(w, `{"error":"endereço inválido: use objeto com 8 campos ou string de 8 linhas"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"address invalid: use object with 8 fields or 8-line string"}`, http.StatusBadRequest)
 			return
 		}
 		if err := ValidateAddress(addrInput); err != nil {
-			http.Error(w, `{"error":"endereço inválido (CEP 8 dígitos; rua, bairro, cidade, estado, país obrigatórios)"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 			return
 		}
 		addr := AddressInputToRepo(addrInput)

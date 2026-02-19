@@ -1,4 +1,4 @@
--- Configuração de agenda da clínica por dia da semana (0=domingo, 1=segunda, ..., 6=sábado)
+-- Clinic schedule configuration by weekday (0=Sunday, 1=Monday, ..., 6=Saturday)
 CREATE TABLE IF NOT EXISTS clinic_schedule_config (
   clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
   day_of_week SMALLINT NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS clinic_schedule_config (
 
 CREATE INDEX idx_clinic_schedule_config_clinic ON clinic_schedule_config(clinic_id);
 
--- Regras de pré-agendamento no contrato (ex.: toda terça 15h) — exibidas no contrato para o responsável assinar
+-- Pre-schedule rules on contract (e.g. every Tuesday 3pm) — shown on contract for guardian to sign
 CREATE TABLE IF NOT EXISTS contract_schedule_rules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   contract_id UUID NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS contract_schedule_rules (
 
 CREATE INDEX idx_contract_schedule_rules_contract ON contract_schedule_rules(contract_id);
 
--- Compromissos concretos (criados na assinatura do contrato ou alterados manualmente pelo profissional)
+-- Concrete appointments (created on contract sign or changed manually by the professional)
 CREATE TABLE IF NOT EXISTS appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   clinic_id UUID NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
