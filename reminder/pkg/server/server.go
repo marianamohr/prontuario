@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/reminder/pkg/config"
-	"github.com/prontuario/reminder/pkg/migrate"
 	"github.com/prontuario/reminder/pkg/reminder"
 )
 
@@ -73,13 +72,13 @@ func (s *Server) trigger(w http.ResponseWriter, r *http.Request) {
 		loc = time.UTC
 	}
 	now := time.Now().In(loc)
-	tomorrow := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
-	sent, skipped := reminder.SendAppointmentReminders(r.Context(), s.pool, tomorrow, s.sender, professionalID, s.cfg.AppPublicURL)
-	log.Printf("[reminder] trigger done: sent=%d skipped=%d date=%s professional_id=%v", sent, skipped, tomorrow.Format("2006-01-02"), professionalID)
+	targetDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, s.cfg.ReminderDaysAhead)
+	sent, skipped := reminder.SendAppointmentReminders(r.Context(), s.pool, targetDate, s.sender, professionalID, s.cfg.AppPublicURL, s.cfg.AutoConfirm)
+	log.Printf("[reminder] trigger done: sent=%d skipped=%d date=%s professional_id=%v", sent, skipped, targetDate.Format("2006-01-02"), professionalID)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"sent":   sent,
+		"sent":    sent,
 		"skipped": skipped,
-		"date":   tomorrow.Format("2006-01-02"),
+		"date":    targetDate.Format("2006-01-02"),
 	})
 }

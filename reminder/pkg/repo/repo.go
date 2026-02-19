@@ -29,21 +29,23 @@ type AppointmentReminderRow struct {
 	StartTime       time.Time
 	GuardianID      uuid.UUID
 	GuardianPhone   string
+	ClinicID        uuid.UUID
+	Status          string
 }
 
 // ListAppointmentsForReminder returns appointments on the given date with guardian phone.
 // If professionalID is non-nil, filters by that professional only.
-// Only status CONFIRMED and PENDING_SIGNATURE; only guardians with non-empty phone.
+// Only status AGENDADO and CONFIRMADO; only guardians with non-empty phone.
 func ListAppointmentsForReminder(ctx context.Context, pool *pgxpool.Pool, date time.Time, professionalID *uuid.UUID) ([]AppointmentReminderRow, error) {
 	dateStr := date.Format("2006-01-02")
 	query := `
-		SELECT a.id, p.id, COALESCE(p.full_name, ''), a.appointment_date, a.start_time, g.id, TRIM(g.phone)
+		SELECT a.id, p.id, COALESCE(p.full_name, ''), a.appointment_date, a.start_time, g.id, TRIM(g.phone), a.clinic_id, a.status
 		FROM appointments a
 		JOIN patients p ON p.id = a.patient_id AND p.deleted_at IS NULL
 		JOIN patient_guardians pg ON pg.patient_id = a.patient_id
 		JOIN legal_guardians g ON g.id = pg.legal_guardian_id AND g.deleted_at IS NULL AND g.status != 'CANCELLED'
 		WHERE a.appointment_date = $1::date
-		  AND a.status IN ('CONFIRMED', 'PENDING_SIGNATURE')
+		  AND a.status IN ('AGENDADO', 'CONFIRMADO')
 		  AND g.phone IS NOT NULL AND TRIM(g.phone) != ''
 	`
 	args := []interface{}{dateStr}
@@ -60,12 +62,21 @@ func ListAppointmentsForReminder(ctx context.Context, pool *pgxpool.Pool, date t
 	var list []AppointmentReminderRow
 	for rows.Next() {
 		var r AppointmentReminderRow
-		if err := rows.Scan(&r.AppointmentID, &r.PatientID, &r.PatientName, &r.AppointmentDate, &r.StartTime, &r.GuardianID, &r.GuardianPhone); err != nil {
+		if err := rows.Scan(&r.AppointmentID, &r.PatientID, &r.PatientName, &r.AppointmentDate, &r.StartTime, &r.GuardianID, &r.GuardianPhone, &r.ClinicID, &r.Status); err != nil {
 			return nil, err
 		}
 		list = append(list, r)
 	}
 	return list, rows.Err()
+}
+
+// ConfirmAppointment sets appointment status to CONFIRMADO if it is currently AGENDADO.
+func ConfirmAppointment(ctx context.Context, pool *pgxpool.Pool, appointmentID, clinicID uuid.UUID) error {
+	_, err := pool.Exec(ctx, `
+		UPDATE appointments SET status = 'CONFIRMADO', updated_at = now()
+		WHERE id = $1 AND clinic_id = $2 AND status = 'AGENDADO'
+	`, appointmentID, clinicID)
+	return err
 }
 
 // AuditEvent for creating audit entries.

@@ -26,16 +26,17 @@ type AppointmentLister interface {
 	ListAppointmentsForReminder(ctx context.Context, pool *pgxpool.Pool, date time.Time, professionalID *uuid.UUID) ([]repo.AppointmentReminderRow, error)
 }
 
-// SendAppointmentReminders loads appointments for the given date (tomorrow in practice), then sends
+// SendAppointmentReminders loads appointments for the given date, then sends
 // one WhatsApp reminder per (appointment, guardian with phone).
+// If autoConfirm is true and appointment status is AGENDADO, updates it to CONFIRMADO after sending.
 // appPublicURL: base URL do frontend para links de remarcação (ex: https://app.example.com).
 // If professionalID is non-nil, only that professional's appointments are sent.
-func SendAppointmentReminders(ctx context.Context, pool *pgxpool.Pool, date time.Time, sender WhatsAppSender, professionalID *uuid.UUID, appPublicURL string) (sent int, skipped int) {
-	return SendAppointmentRemindersWithLister(ctx, pool, date, sender, nil, professionalID, appPublicURL)
+func SendAppointmentReminders(ctx context.Context, pool *pgxpool.Pool, date time.Time, sender WhatsAppSender, professionalID *uuid.UUID, appPublicURL string, autoConfirm bool) (sent int, skipped int) {
+	return SendAppointmentRemindersWithLister(ctx, pool, date, sender, nil, professionalID, appPublicURL, autoConfirm)
 }
 
 // SendAppointmentRemindersWithLister is like SendAppointmentReminders but accepts an optional lister for tests.
-func SendAppointmentRemindersWithLister(ctx context.Context, pool *pgxpool.Pool, date time.Time, sender WhatsAppSender, lister AppointmentLister, professionalID *uuid.UUID, appPublicURL string) (sent int, skipped int) {
+func SendAppointmentRemindersWithLister(ctx context.Context, pool *pgxpool.Pool, date time.Time, sender WhatsAppSender, lister AppointmentLister, professionalID *uuid.UUID, appPublicURL string, autoConfirm bool) (sent int, skipped int) {
 	if pool == nil && lister == nil {
 		log.Printf("[reminder] pool is nil and no lister, skipping")
 		return 0, 0
@@ -81,6 +82,11 @@ func SendAppointmentRemindersWithLister(ctx context.Context, pool *pgxpool.Pool,
 				Source:       strPtr(auditSourceSystem),
 				Metadata:     map[string]string{"appointment_id": r.AppointmentID.String(), "guardian_id": r.GuardianID.String()},
 			})
+		}
+		if autoConfirm && pool != nil && r.Status == "AGENDADO" {
+			if err := repo.ConfirmAppointment(ctx, pool, r.AppointmentID, r.ClinicID); err != nil {
+				log.Printf("[reminder] ConfirmAppointment failed appointment=%s: %v", r.AppointmentID, err)
+			}
 		}
 	}
 	return sent, skipped

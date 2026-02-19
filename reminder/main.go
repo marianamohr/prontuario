@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/reminder/pkg/config"
-	"github.com/prontuario/reminder/pkg/migrate"
 	"github.com/prontuario/reminder/pkg/server"
 )
 
@@ -25,9 +24,7 @@ func main() {
 	if err := pool.Ping(ctx); err != nil {
 		log.Fatalf("ping: %v", err)
 	}
-	if err := migrate.Run(ctx, pool, "migrations"); err != nil {
-		log.Fatalf("migrations: %v", err)
-	}
+	// Usa o mesmo banco do backend; migrations são aplicadas pelo backend.
 	srv := server.New(pool, cfg)
 	addr := ":" + cfg.Port
 	log.Printf("[reminder] listening on %s", addr)
