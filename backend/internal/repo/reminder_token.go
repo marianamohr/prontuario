@@ -19,6 +19,7 @@ type ReminderTokenInfo struct {
 	PatientName     string
 	AppointmentDate time.Time
 	StartTime       time.Time
+	Status          string
 }
 
 // GetAppointmentByReminderToken valida o token e retorna dados do compromisso. Retorna nil se inválido/expirado.
@@ -26,12 +27,12 @@ func GetAppointmentByReminderToken(ctx context.Context, pool *pgxpool.Pool, toke
 	var r ReminderTokenInfo
 	err := pool.QueryRow(ctx, `
 		SELECT a.id, t.guardian_id, a.clinic_id, a.professional_id, a.patient_id, COALESCE(p.full_name, ''),
-		       a.appointment_date, a.start_time
+		       a.appointment_date, a.start_time, a.status
 		FROM appointment_reminder_tokens t
 		JOIN appointments a ON a.id = t.appointment_id
 		JOIN patients p ON p.id = a.patient_id
 		WHERE t.token = $1 AND t.expires_at > now()
-	`, token).Scan(&r.AppointmentID, &r.GuardianID, &r.ClinicID, &r.ProfessionalID, &r.PatientID, &r.PatientName, &r.AppointmentDate, &r.StartTime)
+	`, token).Scan(&r.AppointmentID, &r.GuardianID, &r.ClinicID, &r.ProfessionalID, &r.PatientID, &r.PatientName, &r.AppointmentDate, &r.StartTime, &r.Status)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

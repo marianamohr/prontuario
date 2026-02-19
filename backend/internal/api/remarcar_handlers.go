@@ -48,6 +48,7 @@ func (h *Handler) GetRemarcarByToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // ConfirmRemarcar registra confirmação de presença via token (público).
+// Só atualiza para CONFIRMADO quando o status atual for AGENDADO; se já for CONFIRMADO retorna sucesso; caso contrário 400.
 func (h *Handler) ConfirmRemarcar(w http.ResponseWriter, r *http.Request) {
 	token := mux.Vars(r)["token"]
 	if token == "" {
@@ -59,18 +60,37 @@ func (h *Handler) ConfirmRemarcar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"link inválido ou expirado"}`, http.StatusNotFound)
 		return
 	}
-	_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
-		Action:       "APPOINTMENT_ATTENDANCE_CONFIRMED",
-		ActorType:    "LEGAL_GUARDIAN",
-		ActorID:      &info.GuardianID,
-		ResourceType: strPtr("APPOINTMENT"),
-		ResourceID:   &info.AppointmentID,
-		PatientID:    &info.PatientID,
-		Source:       strPtr("USER"),
-		Metadata:     map[string]string{"guardian_id": info.GuardianID.String(), "via": "reminder_link"},
-	})
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Presença confirmada."})
+	switch info.Status {
+	case "CONFIRMADO":
+		// Idempotente: já confirmado
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Presença confirmada."})
+		return
+	case "AGENDADO":
+		// Atualizar para CONFIRMADO
+		statusCONFIRMADO := "CONFIRMADO"
+		if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, nil, nil, nil, &statusCONFIRMADO, nil); err != nil {
+			log.Printf("[confirm-remarcar] UpdateAppointment: %v", err)
+			http.Error(w, `{"error":"falha ao confirmar"}`, http.StatusInternalServerError)
+			return
+		}
+		_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+			Action:       "APPOINTMENT_ATTENDANCE_CONFIRMED",
+			ActorType:    "LEGAL_GUARDIAN",
+			ActorID:      &info.GuardianID,
+			ResourceType: strPtr("APPOINTMENT"),
+			ResourceID:   &info.AppointmentID,
+			PatientID:    &info.PatientID,
+			Source:       strPtr("USER"),
+			Metadata:     map[string]string{"guardian_id": info.GuardianID.String(), "via": "reminder_link"},
+		})
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Presença confirmada."})
+		return
+	default:
+		http.Error(w, `{"error":"Só é possível confirmar presença quando a consulta estiver agendada"}`, http.StatusBadRequest)
+		return
+	}
 }
 
 // RemarcarAppointment altera data/hora do compromisso via token (público).
@@ -108,7 +128,8 @@ func (h *Handler) RemarcarAppointment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	endTime := startTime.Add(50 * time.Minute)
-	if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, &appointmentDate, &startTime, &endTime, nil, nil); err != nil {
+	statusAGENDADO := "AGENDADO"
+	if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, &appointmentDate, &startTime, &endTime, &statusAGENDADO, nil); err != nil {
 		log.Printf("[remarcar] UpdateAppointment: %v", err)
 		http.Error(w, `{"error":"falha ao atualizar"}`, http.StatusInternalServerError)
 		return

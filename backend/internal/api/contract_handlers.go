@@ -210,27 +210,8 @@ func (h *Handler) SignContract(w http.ResponseWriter, r *http.Request) {
 	_, _ = h.Pool.Exec(r.Context(), "UPDATE contracts SET pdf_url = $1 WHERE id = $2", pdfURL, c.ID)
 	_ = repo.CancelOtherPendingContractsForPatientAndGuardian(r.Context(), h.Pool, c.ID, c.PatientID, c.LegalGuardianID)
 	_ = repo.MarkContractAccessTokenUsed(r.Context(), h.Pool, req.Token)
-	// Cria os compromissos na agenda a partir das regras do contrato (confirmados pela assinatura)
-	if c.ProfessionalID != nil {
-		startDate := time.Now()
-		if c.StartDate != nil {
-			startDate = *c.StartDate
-		}
-		endDate := startDate.AddDate(1, 0, 0)
-		if c.EndDate != nil && c.EndDate.After(startDate) {
-			endDate = *c.EndDate
-		}
-		maxAppointments := 0
-		if c.NumAppointments != nil && *c.NumAppointments > 0 {
-			maxAppointments = *c.NumAppointments
-			// Garantir período mínimo para criar N compromissos (ex.: 1 regra = 1 por semana, então precisamos de N semanas)
-			minEnd := startDate.AddDate(0, 0, maxAppointments*7)
-			if endDate.Before(minEnd) {
-				endDate = minEnd
-			}
-		}
-		_ = repo.CreateAppointmentsFromContractRules(r.Context(), h.Pool, c.ID, c.ClinicID, *c.ProfessionalID, c.PatientID, startDate, endDate, 50, maxAppointments)
-	}
+	// Atualiza compromissos PRE_AGENDADO para AGENDADO (criados no envio do contrato)
+	_, _ = repo.UpdateAppointmentsStatusByContract(r.Context(), h.Pool, c.ID, "AGENDADO")
 
 	guardianUUID := guardian.ID
 	_ = repo.CreateAuditEvent(r.Context(), h.Pool, "CONTRACT_SIGNED", "LEGAL_GUARDIAN", &guardianUUID, map[string]string{"contract_id": c.ID.String(), "patient_id": c.PatientID.String()})

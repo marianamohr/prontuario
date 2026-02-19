@@ -786,6 +786,68 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 	if req.NumAppointments != nil && *req.NumAppointments > 0 {
 		numAppointmentsPtr = req.NumAppointments
 	}
+	// Validar e pré-criar slots: se há schedule_rules, validar contra config e ocupação antes de criar o contrato
+	var scheduleRulesParsed []struct {
+		DayOfWeek int
+		SlotTime  time.Time
+	}
+	for _, r := range req.ScheduleRules {
+		if r.DayOfWeek < 0 || r.DayOfWeek > 6 || r.SlotTime == "" {
+			continue
+		}
+		t, err := time.Parse("15:04", r.SlotTime)
+		if err != nil {
+			continue
+		}
+		scheduleRulesParsed = append(scheduleRulesParsed, struct {
+			DayOfWeek int
+			SlotTime  time.Time
+		}{r.DayOfWeek, t})
+	}
+	if len(scheduleRulesParsed) > 0 && profID != nil {
+		start := time.Now()
+		if startDate != nil {
+			start = *startDate
+		}
+		end := start.AddDate(1, 0, 0)
+		if endDate != nil && endDate.After(start) {
+			end = *endDate
+		}
+		maxApp := 0
+		if numAppointmentsPtr != nil && *numAppointmentsPtr > 0 {
+			maxApp = *numAppointmentsPtr
+		}
+		slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.Pool, *profID, cid, start, end, nil)
+		if err != nil {
+			log.Printf("[send-contract] ListAvailableSlotsForProfessional: %v", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		slotSet := make(map[string]bool)
+		for _, s := range slots {
+			slotSet[s.Date+"|"+s.StartTime] = true
+		}
+		created := 0
+		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+			if maxApp > 0 && created >= maxApp {
+				break
+			}
+			for _, ru := range scheduleRulesParsed {
+				if maxApp > 0 && created >= maxApp {
+					break
+				}
+				if ru.DayOfWeek != int(d.Weekday()) {
+					continue
+				}
+				key := d.Format("2006-01-02") + "|" + ru.SlotTime.Format("15:04")
+				if !slotSet[key] {
+					http.Error(w, `{"error":"Horário fora da configuração da agenda ou já ocupado"}`, http.StatusBadRequest)
+					return
+				}
+				created++
+			}
+		}
+	}
 	contractID, err := repo.CreateContract(r.Context(), h.Pool, cid, patientID, guardianID, profID, templateID, "Responsável", false, tpl.Version, startDate, endDate, valorPtr, periodicidadePtr, signPlacePtr, signDatePtr, numAppointmentsPtr)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -805,6 +867,20 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		}
 		if len(rules) > 0 {
 			_ = repo.CreateContractScheduleRules(r.Context(), h.Pool, contractID, rules)
+			// Criar compromissos PRE_AGENDADO (respeitando config e ocupação já validados acima)
+			start := time.Now()
+			if startDate != nil {
+				start = *startDate
+			}
+			end := start.AddDate(1, 0, 0)
+			if endDate != nil && endDate.After(start) {
+				end = *endDate
+			}
+			maxApp := 0
+			if numAppointmentsPtr != nil && *numAppointmentsPtr > 0 {
+				maxApp = *numAppointmentsPtr
+			}
+			_ = repo.CreateAppointmentsFromContractRulesWithStatus(r.Context(), h.Pool, contractID, cid, *profID, patientID, start, end, 50, maxApp, "PRE_AGENDADO")
 		}
 	}
 	accessToken, err := repo.CreateContractAccessToken(r.Context(), h.Pool, contractID, 7*24*time.Hour)

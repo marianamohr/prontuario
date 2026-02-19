@@ -188,6 +188,7 @@ func main() {
 	protected.Handle("/me/schedule-config", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.GetScheduleConfig))).Methods(http.MethodGet)
 	protected.Handle("/me/schedule-config", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.PutScheduleConfig))).Methods(http.MethodPut)
 	protected.Handle("/me/schedule-config/copy", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.CopyScheduleConfigDay))).Methods(http.MethodPost)
+	protected.Handle("/me/available-slots", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.GetAvailableSlots))).Methods(http.MethodGet)
 	protected.Handle("/appointments", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.ListAppointments))).Methods(http.MethodGet)
 	protected.Handle("/appointments", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.CreateAppointments))).Methods(http.MethodPost)
 	protected.Handle("/appointments/{id}", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.PatchAppointment))).Methods(http.MethodPatch)

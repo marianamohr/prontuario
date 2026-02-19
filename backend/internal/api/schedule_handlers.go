@@ -83,6 +83,63 @@ func (h *Handler) GetScheduleConfig(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(buf)
 }
 
+// GetAvailableSlots retorna slots disponíveis para o profissional logado no intervalo [from, to].
+// Respeita a configuração da agenda e exclui horários já ocupados.
+func (h *Handler) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
+	if auth.RoleFrom(r.Context()) != auth.RoleProfessional && !auth.IsSuperAdmin(r.Context()) {
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
+	}
+	clinicIDStr := auth.ClinicIDFrom(r.Context())
+	if clinicIDStr == nil || *clinicIDStr == "" {
+		http.Error(w, `{"error":"no clinic"}`, http.StatusForbidden)
+		return
+	}
+	clinicID, err := uuid.Parse(*clinicIDStr)
+	if err != nil {
+		http.Error(w, `{"error":"invalid clinic"}`, http.StatusBadRequest)
+		return
+	}
+	userID := auth.UserIDFrom(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"no user"}`, http.StatusForbidden)
+		return
+	}
+	professionalID, err := uuid.Parse(userID)
+	if err != nil {
+		http.Error(w, `{"error":"invalid user"}`, http.StatusBadRequest)
+		return
+	}
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+	if fromStr == "" || toStr == "" {
+		http.Error(w, `{"error":"from and to query params required (YYYY-MM-DD)"}`, http.StatusBadRequest)
+		return
+	}
+	from, err1 := time.Parse("2006-01-02", fromStr)
+	to, err2 := time.Parse("2006-01-02", toStr)
+	if err1 != nil || err2 != nil {
+		http.Error(w, `{"error":"from and to must be YYYY-MM-DD"}`, http.StatusBadRequest)
+		return
+	}
+	if to.Before(from) {
+		http.Error(w, `{"error":"to must be >= from"}`, http.StatusBadRequest)
+		return
+	}
+	slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.Pool, professionalID, clinicID, from, to, nil)
+	if err != nil {
+		log.Printf("[available-slots] ListAvailableSlotsForProfessional: %v", err)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	out := make([]map[string]string, len(slots))
+	for i, s := range slots {
+		out[i] = map[string]string{"date": s.Date, "start_time": s.StartTime}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"slots": out})
+}
+
 // PutScheduleConfig atualiza a configuração de um ou mais dias.
 func (h *Handler) PutScheduleConfig(w http.ResponseWriter, r *http.Request) {
 	if auth.RoleFrom(r.Context()) != auth.RoleProfessional && !auth.IsSuperAdmin(r.Context()) {
@@ -313,7 +370,10 @@ func (h *Handler) PatchAppointment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.Status != nil {
-		allowed := map[string]bool{"CONFIRMED": true, "CANCELLED": true, "COMPLETED": true}
+		allowed := map[string]bool{
+			"PRE_AGENDADO": true, "AGENDADO": true, "CONFIRMADO": true,
+			"CANCELLED": true, "COMPLETED": true, "SERIES_ENDED": true,
+		}
 		if !allowed[*req.Status] {
 			http.Error(w, `{"error":"invalid status"}`, http.StatusBadRequest)
 			return
@@ -597,7 +657,7 @@ func (h *Handler) CreateAppointments(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		endTime := startTime.Add(time.Duration(durationMin) * time.Minute)
-		apptID, err := repo.CreateAppointment(r.Context(), h.Pool, clinicID, *professionalID, contract.PatientID, &contractID, appointmentDate, startTime, endTime, "CONFIRMED", "")
+		apptID, err := repo.CreateAppointment(r.Context(), h.Pool, clinicID, *professionalID, contract.PatientID, &contractID, appointmentDate, startTime, endTime, "AGENDADO", "")
 		if err != nil {
 			http.Error(w, `{"error":"failed to create appointment"}`, http.StatusInternalServerError)
 			return

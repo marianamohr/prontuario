@@ -156,7 +156,7 @@ func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 
 	// tenta criar outro com mesmo CPF na mesma clínica
 	body2 := map[string]interface{}{"full_name": "Paciente CPF 2", "patient_cpf": "52998224725"}
-	raw2, err = json.Marshal(body2)
+	raw2, err := json.Marshal(body2)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

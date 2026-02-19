@@ -346,13 +346,31 @@ func CancelAppointmentsByContractIDs(ctx context.Context, pool *pgxpool.Pool, co
 	return ids, rows.Err()
 }
 
+// UpdateAppointmentsStatusByContract atualiza o status dos appointments de um contrato (ex.: PRE_AGENDADO -> AGENDADO na assinatura).
+func UpdateAppointmentsStatusByContract(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID, newStatus string) (int64, error) {
+	result, err := pool.Exec(ctx, `
+		UPDATE appointments SET status = $1, updated_at = now()
+		WHERE contract_id = $2 AND status NOT IN ('CANCELLED', 'COMPLETED', 'SERIES_ENDED')
+	`, newStatus, contractID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 // CreateAppointmentsFromContractRules gera os compromissos a partir das regras do contrato, do startDate ao endDate (inclusive).
 // Os agendamentos são criados com contract_id preenchido (obrigatório para cancelamento ao encerrar contrato).
 // professionalID e clinicID vêm do contrato; durationMinutos é usado para end_time (start + duration).
 // maxAppointments: se > 0, cria no máximo esse número de agendamentos; 0 = sem limite.
 func CreateAppointmentsFromContractRules(ctx context.Context, pool *pgxpool.Pool, contractID, clinicID, professionalID, patientID uuid.UUID, startDate, endDate time.Time, durationMinutes int, maxAppointments int) error {
+	return CreateAppointmentsFromContractRulesWithStatus(ctx, pool, contractID, clinicID, professionalID, patientID, startDate, endDate, durationMinutes, maxAppointments, "AGENDADO")
+}
+
+// CreateAppointmentsFromContractRulesWithStatus cria compromissos a partir das regras do contrato com o status informado.
+// Usado no envio do contrato (PRE_AGENDADO) ou em fluxos que precisam de outro status.
+func CreateAppointmentsFromContractRulesWithStatus(ctx context.Context, pool *pgxpool.Pool, contractID, clinicID, professionalID, patientID uuid.UUID, startDate, endDate time.Time, durationMinutes int, maxAppointments int, status string) error {
 	if contractID == uuid.Nil {
-		return fmt.Errorf("contract_id é obrigatório para agendamentos criados na assinatura")
+		return fmt.Errorf("contract_id é obrigatório")
 	}
 	rules, err := ListContractScheduleRules(ctx, pool, contractID)
 	if err != nil || len(rules) == 0 {
@@ -376,7 +394,7 @@ func CreateAppointmentsFromContractRules(ctx context.Context, pool *pgxpool.Pool
 			}
 			startTime := r.SlotTime
 			endTime := r.SlotTime.Add(time.Duration(durationMinutes) * time.Minute)
-			_, err := CreateAppointment(ctx, pool, clinicID, professionalID, patientID, &contractID, d, startTime, endTime, "CONFIRMED", "")
+			_, err := CreateAppointment(ctx, pool, clinicID, professionalID, patientID, &contractID, d, startTime, endTime, status, "")
 			if err != nil {
 				return err
 			}
@@ -412,7 +430,7 @@ type AppointmentReminderRow struct {
 }
 
 // ListAppointmentsForReminder returns appointments on the given date with guardian phone, for reminder WhatsApp.
-// Only status CONFIRMED and PENDING_SIGNATURE; only guardians with non-empty phone; excludes soft-deleted guardians.
+// Only status AGENDADO and CONFIRMADO; only guardians with non-empty phone; excludes soft-deleted guardians.
 func ListAppointmentsForReminder(ctx context.Context, pool *pgxpool.Pool, date time.Time) ([]AppointmentReminderRow, error) {
 	dateStr := date.Format("2006-01-02")
 	rows, err := pool.Query(ctx, `
@@ -422,7 +440,7 @@ func ListAppointmentsForReminder(ctx context.Context, pool *pgxpool.Pool, date t
 		JOIN patient_guardians pg ON pg.patient_id = a.patient_id
 		JOIN legal_guardians g ON g.id = pg.legal_guardian_id AND g.deleted_at IS NULL AND g.status != 'CANCELLED'
 		WHERE a.appointment_date = $1::date
-		  AND a.status IN ('CONFIRMED', 'PENDING_SIGNATURE')
+		  AND a.status IN ('AGENDADO', 'CONFIRMADO')
 		  AND g.phone IS NOT NULL AND TRIM(g.phone) != ''
 		ORDER BY a.start_time, g.full_name
 	`, dateStr)
