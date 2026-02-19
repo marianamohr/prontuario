@@ -47,7 +47,7 @@ export function Backoffice() {
   const [filterId, setFilterId] = useState('')
   const [filterType, setFilterType] = useState('')
 
-  const [view, setView] = useState<'users' | 'related'>('users')
+  const [view, setView] = useState<'users' | 'related' | 'reminders'>('users')
   const [relatedProfessional, setRelatedProfessional] = useState<UserRow | null>(null)
   const [relatedLoading, setRelatedLoading] = useState(false)
   const [relatedError, setRelatedError] = useState('')
@@ -307,6 +307,7 @@ export function Backoffice() {
 
       <Tabs value={view} onChange={(_, v) => setView(v)} sx={{ mb: 2 }}>
         <Tab value="users" label="Usuários" />
+        <Tab value="reminders" label="Lembretes" />
         <Tab value="related" label={relatedProfessional ? `Profissional: ${relatedProfessional.full_name}` : 'Profissional: relacionados'} disabled={!relatedProfessional} />
       </Tabs>
 
@@ -316,56 +317,62 @@ export function Backoffice() {
         </Box>
       )}
 
-      <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <Button variant="contained" onClick={() => navigate('/backoffice/invites')}>Enviar convite para profissional</Button>
-      </Box>
+      {view === 'users' && (
+        <>
+          <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button variant="contained" onClick={() => navigate('/backoffice/invites')}>Enviar convite para profissional</Button>
+          </Box>
+          <Box sx={{ mb: 2 }}>
+            <Button variant="outlined" size="small" onClick={load}>Atualizar</Button>
+          </Box>
+        </>
+      )}
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ mb: 1 }}>Lembretes de consulta (amanhã)</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Dispara lembretes WhatsApp para consultas de amanhã. Opcional: ID do profissional para enviar só dele.
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TextField
-            size="small"
-            label="ID do profissional (opcional)"
-            placeholder="UUID do profissional"
-            value={reminderProfessionalId}
-            onChange={(e) => setReminderProfessionalId(e.target.value)}
-            sx={{ minWidth: 280 }}
-          />
-          <Button
-            variant="outlined"
-            disabled={reminderLoading}
-            onClick={async () => {
-              setReminderLoading(true)
-              setReminderResult(null)
-              setReminderError('')
-              try {
-                const res = await api.triggerReminder(reminderProfessionalId.trim() || undefined)
-                setReminderResult({ sent: res.sent, skipped: res.skipped })
-              } catch (e) {
-                setReminderError(e instanceof Error ? e.message : 'Erro ao disparar lembretes')
-              } finally {
-                setReminderLoading(false)
-              }
-            }}
-          >
-            {reminderLoading ? 'Disparando...' : 'Disparar lembretes'}
-          </Button>
-        </Box>
-        {reminderResult && (
-          <Alert severity="success" sx={{ mt: 1 }}>
-            Enviados: {reminderResult.sent}, ignorados: {reminderResult.skipped}
-          </Alert>
-        )}
-        {reminderError && (
-          <Alert severity="error" sx={{ mt: 1 }}>{reminderError}</Alert>
-        )}
-      </Paper>
-      <Box sx={{ mb: 2 }}>
-        <Button variant="outlined" size="small" onClick={load}>Atualizar</Button>
-      </Box>
+      {view === 'reminders' && (
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Lembretes de consulta</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Dispara lembretes WhatsApp para consultas (data configurada no serviço de reminder). Opcional: ID do profissional para enviar só dele.
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              size="small"
+              label="ID do profissional (opcional)"
+              placeholder="UUID do profissional"
+              value={reminderProfessionalId}
+              onChange={(e) => setReminderProfessionalId(e.target.value)}
+              sx={{ minWidth: 280 }}
+            />
+            <Button
+              variant="outlined"
+              disabled={reminderLoading}
+              onClick={async () => {
+                setReminderLoading(true)
+                setReminderResult(null)
+                setReminderError('')
+                try {
+                  const res = await api.triggerReminder(reminderProfessionalId.trim() || undefined)
+                  setReminderResult({ sent: res.sent, skipped: res.skipped })
+                } catch (e) {
+                  setReminderError(e instanceof Error ? e.message : 'Erro ao disparar lembretes')
+                } finally {
+                  setReminderLoading(false)
+                }
+              }}
+            >
+              {reminderLoading ? 'Disparando...' : 'Disparar lembretes'}
+            </Button>
+          </Box>
+          {reminderResult && (
+            <Alert severity="success" sx={{ mt: 1 }}>
+              Enviados: {reminderResult.sent}, ignorados: {reminderResult.skipped}
+            </Alert>
+          )}
+          {reminderError && (
+            <Alert severity="error" sx={{ mt: 1 }}>{reminderError}</Alert>
+          )}
+        </Paper>
+      )}
 
       {view === 'users' && (
         <>
