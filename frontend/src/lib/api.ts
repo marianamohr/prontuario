@@ -645,6 +645,7 @@ export function getRemarcarByToken(token: string) {
     patient_name: string
     current_date: string
     current_start_time: string
+    status?: string
     slots: { date: string; start_time: string }[]
   }>(`/api/appointments/remarcar/${encodeURIComponent(token)}`)
 }

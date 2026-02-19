@@ -35,6 +35,7 @@ export function Remarcar() {
     patient_name: string
     current_date: string
     current_start_time: string
+    status?: string
     slots: { date: string; start_time: string }[]
   } | null>(null)
   const [selectedDate, setSelectedDate] = useState('')
@@ -113,11 +114,16 @@ export function Remarcar() {
     )
   }
 
+  const isConfirmado = data.status === 'CONFIRMADO'
+
   return (
     <Box sx={{ maxWidth: 520, mx: 'auto', p: 2 }}>
       <Typography variant="h5" sx={{ mb: 0.5 }}>Sua consulta</Typography>
       <Typography color="text.secondary" sx={{ mb: 2 }}>
         Paciente: <b>{data.patient_name}</b>. Data atual: {formatDateBR(data.current_date)} às {formatTime(data.current_start_time)}.
+        {data.status && (
+          <> Status: <b>{data.status === 'CONFIRMADO' ? 'Confirmado' : 'Agendado'}</b>.</>
+        )}
       </Typography>
 
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
@@ -125,12 +131,18 @@ export function Remarcar() {
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" sx={{ mb: 1 }}>Confirmar presença</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Confirme que comparecerá na data e horário atuais.
-        </Typography>
-        <Button variant="contained" onClick={handleConfirmar} disabled={confirming}>
-          {confirming ? 'Confirmando...' : 'Confirmar presença'}
-        </Button>
+        {isConfirmado ? (
+          <Typography variant="body2" color="text.secondary">Presença já confirmada.</Typography>
+        ) : (
+          <>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Confirme que comparecerá na data e horário atuais.
+            </Typography>
+            <Button variant="contained" onClick={handleConfirmar} disabled={confirming}>
+              {confirming ? 'Confirmando...' : 'Confirmar presença'}
+            </Button>
+          </>
+        )}
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
@@ -138,11 +150,11 @@ export function Remarcar() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Escolha uma nova data e horário disponível.
         </Typography>
-        {(data.slots || []).length === 0 && (
+        {(data.slots || []).length === 0 ? (
           <Alert severity="info" sx={{ mb: 2 }}>
-            Nenhum horário disponível nas próximas 2 semanas. Entre em contato com a clínica.
+            Nenhum horário disponível no período. Entre em contato com a clínica.
           </Alert>
-        )}
+        ) : null}
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <FormControl size="small" sx={{ minWidth: 180, flex: 1 }}>
             <InputLabel>Data</InputLabel>
