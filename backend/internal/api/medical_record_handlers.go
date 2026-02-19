@@ -83,7 +83,8 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	entries, err := repo.RecordEntriesByMedicalRecord(r.Context(), h.Pool, mrID)
+	limit, offset := ParseLimitOffset(r)
+	entries, total, err := repo.RecordEntriesByMedicalRecordPaginated(r.Context(), h.Pool, mrID, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -122,7 +123,12 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 		h.logAccess(r, cid, auth.RoleFrom(r.Context()), aid, "READ", "MEDICAL_RECORD", &mrID, &patientID)
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"entries": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"entries": out,
+		"limit":   limit,
+		"offset":  offset,
+		"total":   total,
+	})
 }
 
 func (h *Handler) CreateRecordEntry(w http.ResponseWriter, r *http.Request) {

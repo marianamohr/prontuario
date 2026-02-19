@@ -34,23 +34,39 @@ type RecordEntry struct {
 }
 
 func RecordEntriesByMedicalRecord(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID) ([]RecordEntry, error) {
-	rows, err := pool.Query(ctx, `
+	list, _, err := RecordEntriesByMedicalRecordPaginated(ctx, pool, medicalRecordID, 0, 0)
+	return list, err
+}
+
+// RecordEntriesByMedicalRecordPaginated returns record entries with limit/offset. If limit is 0, no limit.
+func RecordEntriesByMedicalRecordPaginated(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID, limit, offset int) ([]RecordEntry, int, error) {
+	var total int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM record_entries WHERE medical_record_id = $1`, medicalRecordID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	q := `
 		SELECT id, medical_record_id, content_encrypted, content_nonce, content_key_version, entry_date, author_id, author_type, created_at
 		FROM record_entries WHERE medical_record_id = $1 ORDER BY entry_date DESC, created_at DESC
-	`, medicalRecordID)
+	`
+	args := []interface{}{medicalRecordID}
+	if limit > 0 {
+		q += ` LIMIT $2 OFFSET $3`
+		args = append(args, limit, offset)
+	}
+	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var list []RecordEntry
 	for rows.Next() {
 		var e RecordEntry
 		if err := rows.Scan(&e.ID, &e.MedicalRecordID, &e.ContentEncrypted, &e.ContentNonce, &e.ContentKeyVersion, &e.EntryDate, &e.AuthorID, &e.AuthorType, &e.CreatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		list = append(list, e)
 	}
-	return list, rows.Err()
+	return list, total, rows.Err()
 }
 
 func CreateRecordEntry(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID, contentEncrypted, contentNonce []byte, contentKeyVersion string, entryDate time.Time, authorID uuid.UUID, authorType string) (uuid.UUID, error) {

@@ -2,12 +2,18 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
 	Port               string
 	DatabaseURL        string
+	DBMaxConns         int           // max connections in pool (0 = pgx default)
+	DBMinConns         int           // min connections in pool (0 = pgx default)
+	DBMaxConnLifetime  time.Duration // max lifetime of a connection (0 = no limit)
+	RequestTimeoutSec  int           // request timeout in seconds (0 = no timeout)
 	JWTSecret          []byte
 	CORSOrigins        []string
 	DataEncryptionKeys string
@@ -48,9 +54,37 @@ func Load() *Config {
 			origins = append(origins, t)
 		}
 	}
+	dbMaxConns := 0
+	if s := os.Getenv("DB_MAX_CONNS"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			dbMaxConns = n
+		}
+	}
+	dbMinConns := 0
+	if s := os.Getenv("DB_MIN_CONNS"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n >= 0 {
+			dbMinConns = n
+		}
+	}
+	dbMaxConnLifetime := time.Duration(0)
+	if s := os.Getenv("DB_MAX_CONN_LIFETIME"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil && d > 0 {
+			dbMaxConnLifetime = d
+		}
+	}
+	requestTimeoutSec := 30
+	if s := os.Getenv("REQUEST_TIMEOUT_SEC"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			requestTimeoutSec = n
+		}
+	}
 	return &Config{
 		Port:               port,
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
+		DBMaxConns:         dbMaxConns,
+		DBMinConns:         dbMinConns,
+		DBMaxConnLifetime:  dbMaxConnLifetime,
+		RequestTimeoutSec:  requestTimeoutSec,
 		JWTSecret:          []byte(jwtSecret),
 		CORSOrigins:        origins,
 		DataEncryptionKeys: getEnv("DATA_ENCRYPTION_KEYS", "v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),

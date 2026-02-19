@@ -229,7 +229,8 @@ func (h *Handler) ListContracts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	list, err := repo.ContractsByClinic(r.Context(), h.Pool, cid)
+	limit, offset := ParseLimitOffset(r)
+	list, total, err := repo.ContractsByClinicPaginated(r.Context(), h.Pool, cid, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -255,7 +256,12 @@ func (h *Handler) ListContracts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"contracts": out,
+		"limit":     limit,
+		"offset":    offset,
+		"total":     total,
+	})
 }
 
 // ListPendingContracts retorna os contratos PENDING da clínica (para a home: contratos que faltam assinar).

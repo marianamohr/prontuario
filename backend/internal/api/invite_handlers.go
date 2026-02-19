@@ -76,7 +76,8 @@ func (h *Handler) ListInvites(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	list, err := repo.ListProfessionalInvites(r.Context(), h.Pool)
+	limit, offset := ParseLimitOffset(r)
+	list, total, err := repo.ListProfessionalInvitesPaginated(r.Context(), h.Pool, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -93,7 +94,12 @@ func (h *Handler) ListInvites(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"items":  out,
+		"limit":  limit,
+		"offset": offset,
+		"total":  total,
+	})
 }
 
 // DeleteInvite removes a professional invite by id (super admin only).

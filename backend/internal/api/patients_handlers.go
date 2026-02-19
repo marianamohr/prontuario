@@ -48,7 +48,13 @@ func (h *Handler) ListPatients(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid clinic"}`, http.StatusBadRequest)
 		return
 	}
-	list, err := repo.PatientsByClinic(r.Context(), h.Pool, cid)
+	limit, offset := ParseLimitOffset(r)
+	total, err := repo.PatientsCountByClinic(r.Context(), h.Pool, cid)
+	if err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	list, err := repo.PatientsByClinicPaginated(r.Context(), h.Pool, cid, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -63,7 +69,12 @@ func (h *Handler) ListPatients(w http.ResponseWriter, r *http.Request) {
 		out[i] = patientResp{ID: list[i].ID.String(), FullName: list[i].FullName, BirthDate: list[i].BirthDate}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"patients": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"patients": out,
+		"limit":    limit,
+		"offset":   offset,
+		"total":    total,
+	})
 }
 
 func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
@@ -1032,7 +1043,8 @@ func (h *Handler) ListPatientContracts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	list, err := repo.ContractsByPatientAndClinic(r.Context(), h.Pool, patientID, *cid)
+	limit, offset := ParseLimitOffset(r)
+	list, total, err := repo.ContractsByPatientAndClinicPaginated(r.Context(), h.Pool, patientID, *cid, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -1072,7 +1084,12 @@ func (h *Handler) ListPatientContracts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"contracts": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"contracts": out,
+		"limit":     limit,
+		"offset":    offset,
+		"total":     total,
+	})
 }
 
 // ResendContract reenvia o e-mail com link para assinatura de um contrato ainda pendente.

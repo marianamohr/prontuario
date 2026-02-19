@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/backend/internal/api"
 	"github.com/prontuario/backend/internal/auth"
+	"github.com/prontuario/backend/internal/cache"
 	"github.com/prontuario/backend/internal/config"
 	"github.com/prontuario/backend/internal/email"
 	"github.com/prontuario/backend/internal/middleware"
@@ -29,8 +30,20 @@ func main() {
 
 	var pool *pgxpool.Pool
 	if cfg.DatabaseURL != "" {
-		var err error
-		pool, err = pgxpool.New(context.Background(), cfg.DatabaseURL)
+		poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+		if err != nil {
+			log.Fatalf("config postgres: %v", err)
+		}
+		if cfg.DBMaxConns > 0 {
+			poolConfig.MaxConns = int32(cfg.DBMaxConns)
+		}
+		if cfg.DBMinConns > 0 {
+			poolConfig.MinConns = int32(cfg.DBMinConns)
+		}
+		if cfg.DBMaxConnLifetime > 0 {
+			poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
+		}
+		pool, err = pgxpool.NewWithConfig(context.Background(), poolConfig)
 		if err != nil {
 			log.Fatalf("conexão postgres: %v", err)
 		}
@@ -70,7 +83,7 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	}).Methods(http.MethodGet)
 
-	h := &api.Handler{Pool: pool, Cfg: cfg}
+	h := &api.Handler{Pool: pool, Cfg: cfg, Cache: cache.New(30 * time.Second)}
 	h.SetHashPassword(auth.HashPassword)
 	if cfg.AppPublicURL != "" {
 		mailCfg := &email.Config{
@@ -193,7 +206,7 @@ func main() {
 	protected.Handle("/backoffice/impersonate/start", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ImpersonateStart))).Methods(http.MethodPost)
 	protected.HandleFunc("/backoffice/impersonate/end", h.ImpersonateEnd).Methods(http.MethodPost)
 
-	chain := middleware.Recover(middleware.RequestID(middleware.CORS(cfg.CORSOrigins)(r)))
+	chain := middleware.Recover(middleware.RequestID(middleware.Timeout(cfg.RequestTimeoutSec)(middleware.CORS(cfg.CORSOrigins)(middleware.Gzip(r)))))
 
 	srv := &http.Server{
 		Addr:         ":" + port,

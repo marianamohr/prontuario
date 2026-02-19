@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -134,14 +135,20 @@ type ContractScheduleRule struct {
 }
 
 func CreateContractScheduleRules(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID, rules []ContractScheduleRule) error {
-	for _, r := range rules {
-		_, err := pool.Exec(ctx, `INSERT INTO contract_schedule_rules (contract_id, day_of_week, slot_time) VALUES ($1, $2, $3)`,
-			contractID, r.DayOfWeek, r.SlotTime)
-		if err != nil {
-			return err
-		}
+	if len(rules) == 0 {
+		return nil
 	}
-	return nil
+	// Batch insert: one query with multiple VALUES to avoid N round-trips.
+	const cols = 3 // contract_id, day_of_week, slot_time
+	args := make([]interface{}, 0, len(rules)*cols)
+	placeholders := make([]string, 0, len(rules))
+	for i, r := range rules {
+		args = append(args, contractID, r.DayOfWeek, r.SlotTime)
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d)", i*cols+1, i*cols+2, i*cols+3))
+	}
+	query := `INSERT INTO contract_schedule_rules (contract_id, day_of_week, slot_time) VALUES ` + strings.Join(placeholders, ", ")
+	_, err := pool.Exec(ctx, query, args...)
+	return err
 }
 
 func ListContractScheduleRules(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID) ([]ContractScheduleRule, error) {

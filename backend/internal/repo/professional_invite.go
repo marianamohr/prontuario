@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -63,24 +64,44 @@ func GetProfessionalInviteByToken(ctx context.Context, pool *pgxpool.Pool, token
 
 // ListProfessionalInvites returns all invites ordered by created_at desc (for backoffice).
 func ListProfessionalInvites(ctx context.Context, pool *pgxpool.Pool) ([]ProfessionalInvite, error) {
-	rows, err := pool.Query(ctx, `
+	list, _, err := ListProfessionalInvitesPaginated(ctx, pool, 0, 0)
+	return list, err
+}
+
+// ListProfessionalInvitesPaginated returns invites with limit/offset. If limit is 0, no limit.
+func ListProfessionalInvitesPaginated(ctx context.Context, pool *pgxpool.Pool, limit, offset int) ([]ProfessionalInvite, int, error) {
+	var total int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM professional_invites`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	q := `
 		SELECT id, token, email, full_name, clinic_id, status, expires_at, created_at
 		FROM professional_invites
 		ORDER BY created_at DESC
-	`)
+	`
+	if limit > 0 {
+		q += ` LIMIT $1 OFFSET $2`
+	}
+	var err error
+	var rows pgx.Rows
+	if limit > 0 {
+		rows, err = pool.Query(ctx, q, limit, offset)
+	} else {
+		rows, err = pool.Query(ctx, q)
+	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var list []ProfessionalInvite
 	for rows.Next() {
 		var inv ProfessionalInvite
 		if err := rows.Scan(&inv.ID, &inv.Token, &inv.Email, &inv.FullName, &inv.ClinicID, &inv.Status, &inv.ExpiresAt, &inv.CreatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		list = append(list, inv)
 	}
-	return list, rows.Err()
+	return list, total, rows.Err()
 }
 
 // GetProfessionalInviteByID returns an invite by id (for resend/delete).

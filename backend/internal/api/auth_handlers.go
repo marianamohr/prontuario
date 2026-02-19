@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/backend/internal/auth"
+	"github.com/prontuario/backend/internal/cache"
 	"github.com/prontuario/backend/internal/config"
 	"github.com/prontuario/backend/internal/repo"
 )
@@ -37,6 +38,7 @@ type UserInfo struct {
 type Handler struct {
 	Pool                       *pgxpool.Pool
 	Cfg                        *config.Config
+	Cache                      *cache.TTL
 	hashPassword               func(string) (string, error)
 	sendPasswordResetEmail     func(to, token string) error
 	sendContractSignedEmail    func(to, name string, pdf []byte, verificationToken string) error
@@ -234,11 +236,18 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(UserInfo{
-		ID:       c.UserID,
-		Role:     c.Role,
-		ClinicID: c.ClinicID,
-	})
+	if h.Cache != nil {
+		if b := h.Cache.Get("me:" + c.UserID); b != nil {
+			_, _ = w.Write(b)
+			return
+		}
+	}
+	info := UserInfo{ID: c.UserID, Role: c.Role, ClinicID: c.ClinicID}
+	b, _ := json.Marshal(info)
+	if h.Cache != nil {
+		h.Cache.Set("me:"+c.UserID, b)
+	}
+	_, _ = w.Write(b)
 }
 
 // GetMySignature retorna a imagem de assinatura do profissional (apenas role PROFESSIONAL).
@@ -326,21 +335,32 @@ func (h *Handler) GetMyBranding(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid clinic"}`, http.StatusBadRequest)
 		return
 	}
+	if h.Cache != nil {
+		if cached := h.Cache.Get("branding:" + clinicID.String()); cached != nil {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(cached)
+			return
+		}
+	}
 	b, err := repo.GetClinicBranding(r.Context(), h.Pool, clinicID)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	enc := json.NewEncoder(w)
-	_ = enc.Encode(map[string]interface{}{
+	payload := map[string]interface{}{
 		"primary_color":         b.PrimaryColor,
 		"background_color":      b.BackgroundColor,
 		"home_label":            b.HomeLabel,
 		"home_image_url":        b.HomeImageURL,
 		"action_button_color":   b.ActionButtonColor,
 		"negation_button_color": b.NegationButtonColor,
-	})
+	}
+	buf, _ := json.Marshal(payload)
+	if h.Cache != nil {
+		h.Cache.Set("branding:"+clinicID.String(), buf)
+	}
+	_, _ = w.Write(buf)
 }
 
 // PutMyBranding atualiza a aparência (white-label) da clínica do profissional.
@@ -408,6 +428,9 @@ func (h *Handler) PutMyBranding(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
+	if h.Cache != nil {
+		h.Cache.Delete("branding:" + clinicID.String())
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Aparência atualizada."})
 }
@@ -422,6 +445,13 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
+	}
+	if h.Cache != nil {
+		if cached := h.Cache.Get("profile:" + userID); cached != nil {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(cached)
+			return
+		}
 	}
 	profID, err := uuid.Parse(userID)
 	if err != nil {
@@ -445,7 +475,7 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	payload := map[string]interface{}{
 		"id":             p.ID.String(),
 		"email":          p.Email,
 		"full_name":      p.FullName,
@@ -453,7 +483,12 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		"birth_date":     p.BirthDate,
 		"address":        addressObj,
 		"marital_status": p.MaritalStatus,
-	})
+	}
+	buf, _ := json.Marshal(payload)
+	if h.Cache != nil {
+		h.Cache.Set("profile:"+userID, buf)
+	}
+	_, _ = w.Write(buf)
 }
 
 // PatchMyProfile atualiza perfil do profissional (trade_name + dados pessoais), sem permitir alterar email/CPF.
@@ -520,6 +555,9 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
+	}
+	if h.Cache != nil {
+		h.Cache.Delete("profile:" + userID)
 	}
 
 	// Sincroniza o nome da clinic interna.

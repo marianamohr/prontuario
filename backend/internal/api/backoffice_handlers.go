@@ -66,6 +66,7 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clinicID := r.URL.Query().Get("clinic_id")
+	limit, offset := ParseLimitOffset(r)
 	type userRow struct {
 		Type     string `json:"type"`
 		ID       string `json:"id"`
@@ -75,12 +76,31 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 		Status   string `json:"status"`
 	}
 	var list []userRow
+	var total int
 	if clinicID == "" {
-		rows, err := h.Pool.Query(r.Context(), "SELECT 'PROFESSIONAL' as type, id, email, full_name, clinic_id::text, status FROM professionals")
+		var c1, c2 int
+		if err := h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM professionals").Scan(&c1); err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		if err := h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM legal_guardians WHERE deleted_at IS NULL").Scan(&c2); err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		total = c1 + c2
+		q := `
+			SELECT type, id, email, full_name, clinic_id, status FROM (
+				SELECT 'PROFESSIONAL' as type, id, email, full_name, clinic_id::text, status FROM professionals
+				UNION ALL
+				SELECT 'LEGAL_GUARDIAN', id, email, full_name, NULL::text, status FROM legal_guardians WHERE deleted_at IS NULL
+			) u ORDER BY type, email LIMIT $1 OFFSET $2
+		`
+		rows, err := h.Pool.Query(r.Context(), q, limit, offset)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var u userRow
 			var cid *string
@@ -93,33 +113,22 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 			}
 			list = append(list, u)
 		}
-		rows.Close()
-		rows2, err := h.Pool.Query(r.Context(), "SELECT 'LEGAL_GUARDIAN' as type, id, email, full_name, status FROM legal_guardians WHERE deleted_at IS NULL")
-		if err != nil {
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-			return
-		}
-		for rows2.Next() {
-			var u userRow
-			if err := rows2.Scan(&u.Type, &u.ID, &u.Email, &u.FullName, &u.Status); err != nil {
-				rows2.Close()
-				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-				return
-			}
-			list = append(list, u)
-		}
-		rows2.Close()
 	} else {
 		cid, err := uuid.Parse(clinicID)
 		if err != nil {
 			http.Error(w, `{"error":"invalid clinic_id"}`, http.StatusBadRequest)
 			return
 		}
-		rows, err := h.Pool.Query(r.Context(), "SELECT id, email, full_name, status FROM professionals WHERE clinic_id = $1", cid)
+		if err := h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM professionals WHERE clinic_id = $1", cid).Scan(&total); err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		rows, err := h.Pool.Query(r.Context(), "SELECT id, email, full_name, status FROM professionals WHERE clinic_id = $1 ORDER BY email LIMIT $2 OFFSET $3", cid, limit, offset)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
+		defer rows.Close()
 		for rows.Next() {
 			var u userRow
 			u.Type = "PROFESSIONAL"
@@ -130,10 +139,14 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 			}
 			list = append(list, u)
 		}
-		rows.Close()
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"users": list})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"users":  list,
+		"limit":  limit,
+		"offset": offset,
+		"total":  total,
+	})
 }
 
 type BackofficeAddressResponse struct {

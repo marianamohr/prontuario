@@ -53,12 +53,27 @@ func scanContractRow(c *Contract, profID *uuid.UUID, signedAt *time.Time, pdfURL
 }
 
 func ContractsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) ([]Contract, error) {
-	rows, err := pool.Query(ctx, `
+	list, _, err := ContractsByClinicPaginated(ctx, pool, clinicID, 0, 0)
+	return list, err
+}
+
+func ContractsByClinicPaginated(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, limit, offset int) ([]Contract, int, error) {
+	var total int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM contracts WHERE clinic_id = $1 AND deleted_at IS NULL`, clinicID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	q := `
 		SELECT id, clinic_id, patient_id, legal_guardian_id, professional_id, template_id, signer_relation, signer_is_patient, status, signed_at, pdf_url, pdf_sha256, audit_json, template_version, verification_token, start_date, end_date, valor, periodicidade, sign_place, sign_date, num_appointments
 		FROM contracts WHERE clinic_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC
-	`, clinicID)
+	`
+	args := []interface{}{clinicID}
+	if limit > 0 {
+		q += ` LIMIT $2 OFFSET $3`
+		args = append(args, limit, offset)
+	}
+	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var list []Contract
@@ -73,12 +88,12 @@ func ContractsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UU
 		var signDate *time.Time
 		var numAppointments *int
 		if err := rows.Scan(&c.ID, &c.ClinicID, &c.PatientID, &c.LegalGuardianID, &profID, &c.TemplateID, &c.SignerRelation, &c.SignerIsPatient, &c.Status, &signedAt, &pdfURL, &pdfSHA, &audit, &c.TemplateVersion, &verTok, &startDate, &endDate, &valor, &periodicidade, &signPlace, &signDate, &numAppointments); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		scanContractRow(&c, profID, signedAt, pdfURL, pdfSHA, verTok, audit, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments)
 		list = append(list, c)
 	}
-	return list, rows.Err()
+	return list, total, rows.Err()
 }
 
 func ContractByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Contract, error) {
@@ -300,7 +315,22 @@ func PendingContractsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID 
 
 // ContractsByPatientAndClinic retorna os contratos do paciente na clínica, com nome do modelo e do responsável.
 func ContractsByPatientAndClinic(ctx context.Context, pool *pgxpool.Pool, patientID, clinicID uuid.UUID) ([]PatientContractItem, error) {
-	rows, err := pool.Query(ctx, `
+	list, _, err := ContractsByPatientAndClinicPaginated(ctx, pool, patientID, clinicID, 0, 0)
+	return list, err
+}
+
+// ContractsByPatientAndClinicPaginated retorna os contratos do paciente com limit/offset.
+func ContractsByPatientAndClinicPaginated(ctx context.Context, pool *pgxpool.Pool, patientID, clinicID uuid.UUID, limit, offset int) ([]PatientContractItem, int, error) {
+	var total int
+	err := pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM contracts c
+		JOIN legal_guardians g ON g.id = c.legal_guardian_id
+		WHERE c.patient_id = $1 AND c.clinic_id = $2 AND c.deleted_at IS NULL AND g.deleted_at IS NULL
+	`, patientID, clinicID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+	q := `
 		SELECT c.id, c.legal_guardian_id, c.status, c.signed_at, c.verification_token, c.pdf_url,
 		       t.name AS template_name, g.full_name AS guardian_name, g.email AS guardian_email
 		FROM contracts c
@@ -308,9 +338,15 @@ func ContractsByPatientAndClinic(ctx context.Context, pool *pgxpool.Pool, patien
 		JOIN legal_guardians g ON g.id = c.legal_guardian_id
 		WHERE c.patient_id = $1 AND c.clinic_id = $2 AND c.deleted_at IS NULL AND g.deleted_at IS NULL
 		ORDER BY c.created_at DESC
-	`, patientID, clinicID)
+	`
+	args := []interface{}{patientID, clinicID}
+	if limit > 0 {
+		q += ` LIMIT $3 OFFSET $4`
+		args = append(args, limit, offset)
+	}
+	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 	var list []PatientContractItem
@@ -319,14 +355,14 @@ func ContractsByPatientAndClinic(ctx context.Context, pool *pgxpool.Pool, patien
 		var signedAt *time.Time
 		var verTok, pdfURL *string
 		if err := rows.Scan(&item.ID, &item.LegalGuardianID, &item.Status, &signedAt, &verTok, &pdfURL, &item.TemplateName, &item.GuardianName, &item.GuardianEmail); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		item.SignedAt = signedAt
 		item.VerificationToken = verTok
 		item.PDFURL = pdfURL
 		list = append(list, item)
 	}
-	return list, rows.Err()
+	return list, total, rows.Err()
 }
 
 // CancelOtherPendingContractsForPatientAndGuardian marca como CANCELLED os demais contratos PENDING do mesmo paciente e responsável (exceto o id indicado).

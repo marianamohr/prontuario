@@ -28,6 +28,13 @@ func (h *Handler) GetScheduleConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid clinic"}`, http.StatusBadRequest)
 		return
 	}
+	if h.Cache != nil {
+		if cached := h.Cache.Get("schedule:" + clinicID.String()); cached != nil {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(cached)
+			return
+		}
+	}
 	list, err := repo.ListScheduleConfig(r.Context(), h.Pool, clinicID)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -68,7 +75,12 @@ func (h *Handler) GetScheduleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"days": out})
+	payload := map[string]interface{}{"days": out}
+	buf, _ := json.Marshal(payload)
+	if h.Cache != nil {
+		h.Cache.Set("schedule:"+clinicID.String(), buf)
+	}
+	_, _ = w.Write(buf)
 }
 
 // PutScheduleConfig atualiza a configuração de um ou mais dias.
@@ -144,6 +156,9 @@ func (h *Handler) PutScheduleConfig(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
+	}
+	if h.Cache != nil {
+		h.Cache.Delete("schedule:" + clinicID.String())
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Configuração salva."})

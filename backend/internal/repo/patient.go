@@ -22,13 +22,24 @@ type Patient struct {
 }
 
 func PatientsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) ([]Patient, error) {
-	rows, err := pool.Query(ctx, `
+	return PatientsByClinicPaginated(ctx, pool, clinicID, 0, 0)
+}
+
+// PatientsByClinicPaginated returns patients for the clinic with limit and offset. If limit is 0, no limit is applied (all rows).
+func PatientsByClinicPaginated(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, limit, offset int) ([]Patient, error) {
+	q := `
 		SELECT id, clinic_id, full_name, birth_date::text, email, address_id,
 		       cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash
 		FROM patients
 		WHERE clinic_id = $1 AND deleted_at IS NULL
 		ORDER BY full_name
-	`, clinicID)
+	`
+	args := []interface{}{clinicID}
+	if limit > 0 {
+		q += ` LIMIT $2 OFFSET $3`
+		args = append(args, limit, offset)
+	}
+	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +60,13 @@ func PatientsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUI
 		list = append(list, p)
 	}
 	return list, rows.Err()
+}
+
+// PatientsCountByClinic returns the total number of patients for the clinic.
+func PatientsCountByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) (int, error) {
+	var n int
+	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM patients WHERE clinic_id = $1 AND deleted_at IS NULL`, clinicID).Scan(&n)
+	return n, err
 }
 
 func PatientByIDAndClinic(ctx context.Context, pool *pgxpool.Pool, id, clinicID uuid.UUID) (*Patient, error) {
