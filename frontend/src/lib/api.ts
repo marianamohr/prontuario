@@ -269,6 +269,12 @@ export function listAppointments(from: string, to: string) {
   return api<{ appointments: AppointmentItem[] }>(`/api/appointments?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
 }
 
+export type AvailableSlotItem = { date: string; start_time: string }
+
+export function listAvailableSlots(from: string, to: string) {
+  return api<{ slots: AvailableSlotItem[] }>(`/api/me/available-slots?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+}
+
 export type ContractForAgendaItem = { id: string; patient_id: string; patient_name: string; template_name: string }
 
 export function listContractsForAgenda() {

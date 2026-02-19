@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import {
   Box,
@@ -73,6 +73,7 @@ export function Agenda() {
   const [contractsForAgenda, setContractsForAgenda] = useState<api.ContractForAgendaItem[]>([])
   const [selectedContractId, setSelectedContractId] = useState('')
   const [newSlots, setNewSlots] = useState<{ appointment_date: string; start_time: string }[]>([{ appointment_date: '', start_time: '09:00' }])
+  const [createAvailableSlots, setCreateAvailableSlots] = useState<api.AvailableSlotItem[]>([])
   const [creating, setCreating] = useState(false)
   const [createMessage, setCreateMessage] = useState('')
   const [popoverId, setPopoverId] = useState<string | null>(null)
@@ -140,18 +141,37 @@ export function Agenda() {
           if (r.contracts?.length && !selectedContractId) setSelectedContractId(r.contracts[0].id)
         })
         .catch(() => setContractsForAgenda([]))
+      const from = toYYYYMMDD(new Date())
+      const toDate = new Date()
+      toDate.setDate(toDate.getDate() + 12 * 7)
+      const to = toYYYYMMDD(toDate)
+      api.listAvailableSlots(from, to)
+        .then((r) => setCreateAvailableSlots(r.slots || []))
+        .catch(() => setCreateAvailableSlots([]))
     }
   }, [createModalOpen, selectedContractId])
+
+  const createModalUniqueDates = useMemo(() => {
+    const dates = new Set<string>()
+    for (const s of createAvailableSlots) dates.add(s.date)
+    return Array.from(dates).sort()
+  }, [createAvailableSlots])
+
+  const getTimesForDate = (date: string) => {
+    const times = createAvailableSlots.filter((s) => s.date === date).map((s) => s.start_time)
+    return Array.from(new Set(times)).sort()
+  }
 
   const handleOpenCreateModal = () => {
     setCreateMessage('')
     setSelectedContractId(contractsForAgenda[0]?.id || '')
-    setNewSlots([{ appointment_date: '', start_time: '09:00' }])
+    setNewSlots([{ appointment_date: '', start_time: '' }])
     setCreateModalOpen(true)
   }
 
   const handleAddSlot = () => {
-    setNewSlots((prev) => [...prev, { appointment_date: '', start_time: '09:00' }])
+    const first = createAvailableSlots[0]
+    setNewSlots((prev) => [...prev, first ? { appointment_date: first.date, start_time: first.start_time } : { appointment_date: '', start_time: '' }])
   }
 
   const handleRemoveSlot = (i: number) => {
@@ -208,9 +228,12 @@ export function Agenda() {
   const weekLabel = `${formatDateBR(weekStart)} – ${formatDateBR(to)}`
 
   const statusColor = (status: string) => {
-    if (status === 'CONFIRMED') return 'success.light'
+    if (status === 'CONFIRMADO') return 'success.light'
     if (status === 'COMPLETED') return 'info.light'
-    return 'warning.light'
+    if (status === 'PRE_AGENDADO') return 'warning.light'
+    if (status === 'AGENDADO') return 'primary.light'
+    if (status === 'CANCELLED' || status === 'SERIES_ENDED') return 'error.light'
+    return 'grey.300'
   }
 
   return (
@@ -337,9 +360,12 @@ export function Agenda() {
           <FormControl fullWidth size="small">
             <InputLabel>Status</InputLabel>
             <Select value={editStatus} label="Status" onChange={(e) => setEditStatus(e.target.value)}>
-              <MenuItem value="CONFIRMED">Confirmado</MenuItem>
+              <MenuItem value="PRE_AGENDADO">Pré-agendado</MenuItem>
+              <MenuItem value="AGENDADO">Agendado</MenuItem>
+              <MenuItem value="CONFIRMADO">Confirmado</MenuItem>
               <MenuItem value="CANCELLED">Cancelado</MenuItem>
               <MenuItem value="COMPLETED">Realizado</MenuItem>
+              <MenuItem value="SERIES_ENDED">Série encerrada</MenuItem>
             </Select>
           </FormControl>
         </Box>
@@ -363,14 +389,51 @@ export function Agenda() {
             ))}
           </Select>
         </FormControl>
-        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Data e horário</Typography>
-        {newSlots.map((slot, i) => (
-          <Box key={i} sx={{ display: 'flex', gap: 0.5, alignItems: 'center', mb: 0.5 }}>
-            <TextField type="date" size="small" value={slot.appointment_date} onChange={(e) => setNewSlots((prev) => prev.map((s, j) => j === i ? { ...s, appointment_date: e.target.value } : s))} InputLabelProps={{ shrink: true }} sx={{ flex: 1 }} />
-            <TextField type="time" size="small" value={slot.start_time} onChange={(e) => setNewSlots((prev) => prev.map((s, j) => j === i ? { ...s, start_time: e.target.value } : s))} InputLabelProps={{ shrink: true }} />
-            <IconButton size="small" color="error" onClick={() => handleRemoveSlot(i)} aria-label="Remover"><DeleteOutlineIcon fontSize="small" /></IconButton>
-          </Box>
-        ))}
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Data e horário (apenas slots disponíveis na configuração da agenda)</Typography>
+        {createModalUniqueDates.length === 0 && createModalOpen && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Carregando slots...</Typography>
+        )}
+        {newSlots.map((slot, i) => {
+          const timesForDate = getTimesForDate(slot.appointment_date)
+          const timeValid = timesForDate.includes(slot.start_time)
+          return (
+            <Box key={i} sx={{ display: 'flex', gap: 0.5, alignItems: 'center', mb: 0.5 }}>
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>Data</InputLabel>
+                <Select
+                  value={slot.appointment_date}
+                  label="Data"
+                  onChange={(e) => {
+                    const date = e.target.value
+                    const times = getTimesForDate(date)
+                    setNewSlots((prev) => prev.map((s, j) => j === i ? { appointment_date: date, start_time: times[0] || s.start_time } : s))
+                  }}
+                  displayEmpty
+                >
+                  <MenuItem value="">Selecione</MenuItem>
+                  {createModalUniqueDates.map((d) => (
+                    <MenuItem key={d} value={d}>{formatDateBR(d)}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 100 }}>
+                <InputLabel>Horário</InputLabel>
+                <Select
+                  value={timeValid ? slot.start_time : (timesForDate[0] ?? '')}
+                  label="Horário"
+                  onChange={(e) => setNewSlots((prev) => prev.map((s, j) => j === i ? { ...s, start_time: e.target.value } : s))}
+                  displayEmpty
+                >
+                  <MenuItem value="">-</MenuItem>
+                  {timesForDate.map((t) => (
+                    <MenuItem key={t} value={t}>{t}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <IconButton size="small" color="error" onClick={() => handleRemoveSlot(i)} aria-label="Remover"><DeleteOutlineIcon fontSize="small" /></IconButton>
+            </Box>
+          )
+        })}
         <Button size="small" variant="outlined" onClick={handleAddSlot} sx={{ mb: 1 }}>+ Adicionar horário</Button>
         {createMessage && <Typography sx={{ color: createMessage.includes('Falha') ? 'error.main' : 'success.main', fontSize: 14 }}>{createMessage}</Typography>}
       </AppDialog>

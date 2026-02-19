@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Box,
@@ -48,6 +48,7 @@ export function PatientContracts() {
   const [deletingContractId, setDeletingContractId] = useState<string | null>(null)
   const [scheduleRules, setScheduleRules] = useState<api.ScheduleRule[]>([])
   const [contractNumAppointments, setContractNumAppointments] = useState<number | ''>('')
+  const [availableSlots, setAvailableSlots] = useState<api.AvailableSlotItem[]>([])
   const [endingContractId, setEndingContractId] = useState<string | null>(null)
   const [endContractDate, setEndContractDate] = useState('')
   const [showAllContracts, setShowAllContracts] = useState(false)
@@ -80,6 +81,34 @@ export function PatientContracts() {
     load()
   }, [load])
 
+  // Carregar slots disponíveis para pré-agendamento quando o modal de contrato estiver aberto
+  useEffect(() => {
+    if (!contractModalOpen || !canSendContract) return
+    const fromDate = contractDataInicio ? new Date(contractDataInicio + 'T12:00:00') : new Date()
+    const from = fromDate.toISOString().slice(0, 10)
+    const toDate = new Date(fromDate)
+    toDate.setDate(toDate.getDate() + 12 * 7)
+    const to = toDate.toISOString().slice(0, 10)
+    api.listAvailableSlots(from, to)
+      .then((r) => setAvailableSlots(r.slots || []))
+      .catch(() => setAvailableSlots([]))
+  }, [contractModalOpen, canSendContract, contractDataInicio])
+
+  // Por dia da semana (0=dom .. 6=sáb), horários disponíveis (únicos e ordenados)
+  const availableTimesByDay = useMemo(() => {
+    const sets: Record<number, Set<string>> = {}
+    for (const s of availableSlots) {
+      const day = new Date(s.date + 'T12:00:00').getDay()
+      if (!sets[day]) sets[day] = new Set()
+      sets[day].add(s.start_time)
+    }
+    const byDay: Record<number, string[]> = {}
+    for (const d of Object.keys(sets)) {
+      byDay[Number(d)] = Array.from(sets[Number(d)]).sort()
+    }
+    return byDay
+  }, [availableSlots])
+
   const openContractModal = () => {
     setContractModalOpen(true)
     setContractMessage('')
@@ -91,6 +120,7 @@ export function PatientContracts() {
     setContractPeriodicidade('')
     setScheduleRules([])
     setContractNumAppointments('')
+    setAvailableSlots([])
     api.listContractTemplates().then((r) => {
       setTemplates(r.templates)
       if (r.templates.length > 0) setSelectedTemplateId(r.templates[0].id)
@@ -448,20 +478,44 @@ export function PatientContracts() {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <TextField type="number" label="Quantidade de agendamentos (opcional)" size="small" fullWidth value={contractNumAppointments === '' ? '' : contractNumAppointments} onChange={(e) => { const v = e.target.value; setContractNumAppointments(v === '' ? '' : Math.max(1, parseInt(v, 10) || 1)) }} placeholder="Ex.: 4" inputProps={{ min: 1 }} />
             <Typography variant="caption" color="text.secondary">Pré-agendar consultas (opcional)</Typography>
-            {scheduleRules.map((r, i) => (
-              <Box key={i} sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                <FormControl size="small" sx={{ minWidth: 100 }}>
-                  <Select value={r.day_of_week} onChange={(e) => setScheduleRules((prev) => prev.map((x, j) => j === i ? { ...x, day_of_week: Number(e.target.value) } : x))}>
-                    {DAY_NAMES.map((name, d) => (
-                      <MenuItem key={d} value={d}>{name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <TextField type="time" size="small" value={r.slot_time} onChange={(e) => setScheduleRules((prev) => prev.map((x, j) => j === i ? { ...x, slot_time: e.target.value } : x))} sx={{ width: 110 }} InputLabelProps={{ shrink: true }} />
-                <IconButton size="small" color="error" onClick={() => setScheduleRules((prev) => prev.filter((_, j) => j !== i))} aria-label="Remover"><DeleteOutlineIcon fontSize="small" /></IconButton>
-              </Box>
-            ))}
-            <Button size="small" variant="outlined" onClick={() => setScheduleRules((prev) => [...prev, { day_of_week: 1, slot_time: '09:00' }])}>+ Adicionar horário</Button>
+            {scheduleRules.map((r, i) => {
+              const timesForDay = availableTimesByDay[r.day_of_week] || []
+              const slotTimeValid = timesForDay.includes(r.slot_time)
+              return (
+                <Box key={i} sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                  <FormControl size="small" sx={{ minWidth: 100 }}>
+                    <Select value={r.day_of_week} onChange={(e) => {
+                      const day = Number(e.target.value)
+                      const times = availableTimesByDay[day] || []
+                      const firstTime = times[0] || r.slot_time
+                      setScheduleRules((prev) => prev.map((x, j) => j === i ? { ...x, day_of_week: day, slot_time: firstTime } : x))
+                    }}>
+                      {DAY_NAMES.map((name, d) => (
+                        <MenuItem key={d} value={d}>{name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" sx={{ minWidth: 110 }}>
+                    <Select
+                      value={slotTimeValid ? r.slot_time : (timesForDay[0] ?? '')}
+                      onChange={(e) => setScheduleRules((prev) => prev.map((x, j) => j === i ? { ...x, slot_time: e.target.value } : x))}
+                      displayEmpty
+                    >
+                      <MenuItem value="" disabled>Nenhum slot</MenuItem>
+                      {timesForDay.map((t) => (
+                        <MenuItem key={t} value={t}>{t}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <IconButton size="small" color="error" onClick={() => setScheduleRules((prev) => prev.filter((_, j) => j !== i))} aria-label="Remover"><DeleteOutlineIcon fontSize="small" /></IconButton>
+                </Box>
+              )
+            })}
+            <Button size="small" variant="outlined" onClick={() => {
+              const firstDay = Object.keys(availableTimesByDay).map(Number).sort((a, b) => a - b)[0] ?? 1
+              const firstTime = availableTimesByDay[firstDay]?.[0] ?? '09:00'
+              setScheduleRules((prev) => [...prev, { day_of_week: firstDay, slot_time: firstTime }])
+            }}>+ Adicionar horário</Button>
           </Box>
         </Box>
         {contractMessage && <Alert severity={contractMessage.includes('Falha') ? 'error' : 'success'} sx={{ mt: 1 }}>{contractMessage}</Alert>}

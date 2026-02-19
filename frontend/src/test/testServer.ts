@@ -10,5 +10,20 @@ export const server = setupServer(
       total: 1,
     })
   }),
+  http.get(/\/api\/me\/available-slots/, ({ request }) => {
+    const url = new URL(request.url)
+    const from = url.searchParams.get('from')
+    const to = url.searchParams.get('to')
+    if (!from || !to) {
+      return HttpResponse.json({ error: 'from and to required' }, { status: 400 })
+    }
+    return HttpResponse.json({
+      slots: [
+        { date: '2025-02-04', start_time: '09:00' },
+        { date: '2025-02-04', start_time: '10:00' },
+        { date: '2025-02-11', start_time: '09:00' },
+      ],
+    })
+  }),
 )
 
