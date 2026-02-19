@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import html2pdf from 'html2pdf.js'
 import {
   Box,
   Typography,
@@ -263,23 +262,25 @@ export function PatientContracts() {
               html2canvas: { scale: 2, useCORS: true },
               jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
             }
-            html2pdf()
-              .set(opt)
-              .from(body)
-              .outputPdf('blob')
-              .then(
-                (blob) => {
-                  const url = URL.createObjectURL(blob)
-                  window.open(url, '_blank', 'noopener,noreferrer')
-                  URL.revokeObjectURL(url)
-                  document.body.removeChild(iframe)
-                  setPreviewPdfLoading(false)
-                },
-                () => {
-                  if (document.body.contains(iframe)) document.body.removeChild(iframe)
-                  setPreviewPdfLoading(false)
-                }
-              )
+            import('html2pdf.js').then(({ default: html2pdf }) =>
+              html2pdf()
+                .set(opt)
+                .from(body)
+                .outputPdf('blob')
+                .then(
+                  (blob: Blob) => {
+                    const url = URL.createObjectURL(blob)
+                    window.open(url, '_blank', 'noopener,noreferrer')
+                    URL.revokeObjectURL(url)
+                    document.body.removeChild(iframe)
+                    setPreviewPdfLoading(false)
+                  },
+                  () => {
+                    if (document.body.contains(iframe)) document.body.removeChild(iframe)
+                    setPreviewPdfLoading(false)
+                  }
+                )
+            )
           }, 100)
         }
       })

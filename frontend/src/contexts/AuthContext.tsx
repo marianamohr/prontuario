@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { User } from '../lib/api'
 import * as api from '../lib/api'
 
@@ -71,21 +71,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isImpersonated = !!user && (localStorage.getItem('impersonating') === '1')
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        isImpersonated,
-        login,
-        logout,
-        refresh,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      token,
+      loading,
+      isImpersonated,
+      login,
+      logout,
+      refresh,
+    }),
+    [user, token, loading, isImpersonated, login, logout, refresh]
   )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

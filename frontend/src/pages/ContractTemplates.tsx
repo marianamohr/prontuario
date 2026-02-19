@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import html2pdf from 'html2pdf.js'
 import {
   Box,
   Typography,
@@ -257,19 +256,21 @@ export function ContractTemplates() {
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
         }
-        html2pdf().set(opt).from(body).outputPdf('blob').then(
-          (blob) => {
-            const url = URL.createObjectURL(blob)
-            window.open(url, '_blank', 'noopener,noreferrer')
-            URL.revokeObjectURL(url)
-            document.body.removeChild(iframe)
-            setPdfLoading(false)
-          },
-          () => {
-            if (document.body.contains(iframe)) document.body.removeChild(iframe)
-            setPdfLoading(false)
-            setFormError('Falha ao gerar o PDF. Tente novamente.')
-          }
+        import('html2pdf.js').then(({ default: html2pdf }) =>
+          html2pdf().set(opt).from(body).outputPdf('blob').then(
+            (blob: Blob) => {
+              const url = URL.createObjectURL(blob)
+              window.open(url, '_blank', 'noopener,noreferrer')
+              URL.revokeObjectURL(url)
+              document.body.removeChild(iframe)
+              setPdfLoading(false)
+            },
+            () => {
+              if (document.body.contains(iframe)) document.body.removeChild(iframe)
+              setPdfLoading(false)
+              setFormError('Falha ao gerar o PDF. Tente novamente.')
+            }
+          )
         )
       }, 100)
     }
@@ -303,18 +304,20 @@ export function ContractTemplates() {
           html2canvas: { scale: 2, useCORS: true },
           jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const },
         }
-        html2pdf().set(opt).from(body).outputPdf('blob').then(
-          (blob) => {
-            const url = URL.createObjectURL(blob)
-            window.open(url, '_blank', 'noopener,noreferrer')
-            URL.revokeObjectURL(url)
-            document.body.removeChild(iframe)
-            onDone()
-          },
-          () => {
-            if (document.body.contains(iframe)) document.body.removeChild(iframe)
-            onDone()
-          }
+        import('html2pdf.js').then(({ default: html2pdf }) =>
+          html2pdf().set(opt).from(body).outputPdf('blob').then(
+            (blob: Blob) => {
+              const url = URL.createObjectURL(blob)
+              window.open(url, '_blank', 'noopener,noreferrer')
+              URL.revokeObjectURL(url)
+              document.body.removeChild(iframe)
+              onDone()
+            },
+            () => {
+              if (document.body.contains(iframe)) document.body.removeChild(iframe)
+              onDone()
+            }
+          )
         )
       }, 100)
     }
@@ -349,7 +352,7 @@ export function ContractTemplates() {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
               {signatureImageData && (
                 <Box sx={{ mb: 1 }}>
-                  <Box component="img" src={signatureImageData} alt="Sua assinatura" sx={{ maxHeight: 56, maxWidth: 200, border: '1px solid', borderColor: 'divider', borderRadius: 0.5 }} />
+                  <Box component="img" src={signatureImageData} alt="Sua assinatura" loading="lazy" sx={{ maxHeight: 56, maxWidth: 200, border: '1px solid', borderColor: 'divider', borderRadius: 0.5 }} />
                 </Box>
               )}
               <Button variant="outlined" component="label" disabled={signatureSaving} size="small">

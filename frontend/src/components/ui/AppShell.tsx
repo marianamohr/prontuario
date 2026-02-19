@@ -114,7 +114,7 @@ export function AppShell() {
             }}
           >
             {homeImageUrl ? (
-              <img src={homeImageUrl} alt="" style={{ height: 28, maxWidth: 100, objectFit: 'contain' }} />
+              <img src={homeImageUrl} alt="" loading="lazy" style={{ height: 28, maxWidth: 100, objectFit: 'contain' }} />
             ) : (
               <HomeIcon />
             )}

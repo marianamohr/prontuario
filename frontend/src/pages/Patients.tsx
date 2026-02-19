@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import useSWR from 'swr'
 import { Link } from 'react-router-dom'
 import {
   Box,
@@ -101,9 +102,24 @@ export function Patients() {
   const branding = useBranding()?.branding ?? null
   const actionColor = user?.role === 'PROFESSIONAL' && branding?.action_button_color ? branding.action_button_color : DEFAULT_ACTION
   const negationColor = user?.role === 'PROFESSIONAL' && branding?.negation_button_color ? branding.negation_button_color : DEFAULT_NEGATION
-  const [list, setList] = useState<{ id: string; full_name: string; birth_date?: string }[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [page, setPage] = useState(0)
+  const limit = 20
+  const { data, error: swrError, isLoading, mutate } = useSWR(
+    user?.role === 'PROFESSIONAL' || user?.role === 'SUPER_ADMIN' ? ['patients', page, limit] : null,
+    () => api.listPatients({ limit, offset: page * limit }),
+    { keepPreviousData: true }
+  )
+  const list = data?.patients ?? []
+  const total = data?.total ?? 0
+  const loading = isLoading
+  const [localError, setLocalError] = useState('')
+  const [errorDismissed, setErrorDismissed] = useState(false)
+  const error = localError || (swrError && !errorDismissed ? 'Falha ao carregar pacientes.' : '')
+  const setError = useCallback((msg: string) => {
+    if (msg) setLocalError(msg)
+    else { setLocalError(''); setErrorDismissed(true) }
+  }, [])
+  useEffect(() => { setErrorDismissed(false) }, [page])
   const [deletingPatientId, setDeletingPatientId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [inviteModalOpen, setInviteModalOpen] = useState(false)
@@ -159,18 +175,7 @@ export function Patients() {
   const [editGuardianId, setEditGuardianId] = useState<string | null>(null)
   const [showEditGuardianCPF, setShowEditGuardianCPF] = useState(false)
 
-  const load = useCallback(() => {
-    setLoading(true)
-    api
-      .listPatients()
-      .then((r) => setList(r.patients))
-      .catch(() => setError('Falha ao carregar pacientes.'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
+  const load = useCallback(() => mutate(), [mutate])
 
   const resetForm = () => {
     setSamePerson(false)
@@ -541,9 +546,24 @@ export function Patients() {
               ))}
             </TableBody>
           </Table>
-          {list.length === 0 && (
+          {list.length === 0 && !loading && (
             <Box sx={{ py: 4, textAlign: 'center' }}>
               <Typography color="text.secondary">Nenhum paciente cadastrado.</Typography>
+            </Box>
+          )}
+          {total > limit && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, py: 1, borderTop: 1, borderColor: 'divider' }}>
+              <Typography variant="body2" color="text.secondary">
+                Página {page + 1} de {Math.max(1, Math.ceil(total / limit))} ({total} no total)
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button size="small" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+                  Anterior
+                </Button>
+                <Button size="small" disabled={(page + 1) * limit >= total} onClick={() => setPage((p) => p + 1)}>
+                  Próxima
+                </Button>
+              </Box>
             </Box>
           )}
         </TableContainer>

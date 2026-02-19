@@ -1,1 +1,0 @@
-import{j as a,B as e}from"./index-DJlnvih6.js";function i({children:s,maxWidth:o="lg",disableGutters:t=!1,sx:x={}}){return a.jsx(e,{sx:{width:"100%",maxWidth:o===!1?"none":void 0,mx:"auto",px:t?0:{xs:2,sm:3},py:2,...x},children:s})}export{i as P};

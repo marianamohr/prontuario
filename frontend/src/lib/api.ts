@@ -296,8 +296,19 @@ export function endContract(patientId: string, contractId: string, end_date: str
   return api<{ message: string }>(`/api/patients/${patientId}/contracts/${contractId}/end`, { method: 'PUT', json: { end_date } })
 }
 
-export function listPatients() {
-  return api<{ patients: { id: string; full_name: string; birth_date?: string }[] }>('/api/patients')
+export type ListPatientsRes = {
+  patients: { id: string; full_name: string; birth_date?: string }[]
+  limit: number
+  offset: number
+  total: number
+}
+
+export function listPatients(opts?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams()
+  if (opts?.limit != null) params.set('limit', String(opts.limit))
+  if (opts?.offset != null) params.set('offset', String(opts.offset))
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return api<ListPatientsRes>(`/api/patients${q}`)
 }
 
 export type PatientDetail = {
@@ -448,8 +459,19 @@ export type PatientContractItem = {
   verify_url?: string
 }
 
-export function listPatientContracts(patientId: string) {
-  return api<{ contracts: PatientContractItem[] }>(`/api/patients/${patientId}/contracts`)
+export type ListPatientContractsRes = {
+  contracts: PatientContractItem[]
+  limit: number
+  offset: number
+  total: number
+}
+
+export function listPatientContracts(patientId: string, opts?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams()
+  if (opts?.limit != null) params.set('limit', String(opts.limit))
+  if (opts?.offset != null) params.set('offset', String(opts.offset))
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return api<ListPatientContractsRes>(`/api/patients/${patientId}/contracts${q}`)
 }
 
 export function resendPatientContract(patientId: string, contractId: string) {
@@ -492,9 +514,20 @@ export function deleteContractTemplate(id: string) {
   return api<{ message: string }>(`/api/contract-templates/${id}`, { method: 'DELETE' })
 }
 
-export function listBackofficeUsers(clinicId?: string) {
-  const q = clinicId ? `?clinic_id=${encodeURIComponent(clinicId)}` : ''
-  return api<{ users: { type: string; id: string; email: string; full_name: string; clinic_id?: string; status: string }[] }>(`/api/backoffice/users${q}`)
+export type ListBackofficeUsersRes = {
+  users: { type: string; id: string; email: string; full_name: string; clinic_id?: string; status: string }[]
+  limit: number
+  offset: number
+  total: number
+}
+
+export function listBackofficeUsers(clinicId?: string, opts?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams()
+  if (clinicId) params.set('clinic_id', clinicId)
+  if (opts?.limit != null) params.set('limit', String(opts.limit))
+  if (opts?.offset != null) params.set('offset', String(opts.offset))
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return api<ListBackofficeUsersRes>(`/api/backoffice/users${q}`)
 }
 
 export function getBackofficeProfessionalRelated(professionalId: string) {
@@ -566,8 +599,19 @@ export type BackofficeInviteItem = {
   created_at: string
 }
 
-export function listInvites() {
-  return api<BackofficeInviteItem[]>('/api/backoffice/invites', { method: 'GET' })
+export type ListInvitesRes = {
+  items: BackofficeInviteItem[]
+  limit: number
+  offset: number
+  total: number
+}
+
+export function listInvites(opts?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams()
+  if (opts?.limit != null) params.set('limit', String(opts.limit))
+  if (opts?.offset != null) params.set('offset', String(opts.offset))
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return api<ListInvitesRes>(`/api/backoffice/invites${q}`)
 }
 
 export function createInvite(email: string, full_name: string) {
@@ -753,10 +797,19 @@ export function acceptPatientInvite(data: {
   })
 }
 
-export function listRecordEntries(patientId: string) {
-  return api<{ entries: { id: string; content: string; entry_date: string; author_id: string; author_type: string; created_at: string }[] }>(
-    `/api/patients/${patientId}/record-entries`
-  )
+export type ListRecordEntriesRes = {
+  entries: { id: string; content: string; entry_date: string; author_id: string; author_type: string; created_at: string }[]
+  limit: number
+  offset: number
+  total: number
+}
+
+export function listRecordEntries(patientId: string, opts?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams()
+  if (opts?.limit != null) params.set('limit', String(opts.limit))
+  if (opts?.offset != null) params.set('offset', String(opts.offset))
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return api<ListRecordEntriesRes>(`/api/patients/${patientId}/record-entries${q}`)
 }
 
 export function createRecordEntry(patientId: string, content: string, entry_date?: string) {

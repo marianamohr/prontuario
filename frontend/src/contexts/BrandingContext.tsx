@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Branding } from '../lib/api'
 import * as api from '../lib/api'
 import { useAuth } from './AuthContext'
@@ -36,11 +36,12 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
     refetch()
   }, [refetch])
 
-  return (
-    <BrandingContext.Provider value={{ branding, loading, refetch }}>
-      {children}
-    </BrandingContext.Provider>
+  const value = useMemo(
+    () => ({ branding, loading, refetch }),
+    [branding, loading, refetch]
   )
+
+  return <BrandingContext.Provider value={value}>{children}</BrandingContext.Provider>
 }
 
 export function useBranding() {

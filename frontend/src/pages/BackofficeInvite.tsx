@@ -45,8 +45,8 @@ export function BackofficeInvite() {
     if (user?.role !== 'SUPER_ADMIN') return
     setLoading(true)
     try {
-      const list = await api.listInvites()
-      setInvites(list)
+      const res = await api.listInvites()
+      setInvites(res.items)
     } catch {
       setInvites([])
     } finally {
