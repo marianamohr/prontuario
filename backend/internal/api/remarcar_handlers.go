@@ -37,13 +37,18 @@ func (h *Handler) GetRemarcarByToken(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[remarcar] ListAvailableSlots: %v", err)
 		slots = nil
 	}
+	slotsOut := make([]map[string]string, len(slots))
+	for i, s := range slots {
+		slotsOut[i] = map[string]string{"date": s.Date, "start_time": s.StartTime}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"appointment_id":    info.AppointmentID.String(),
+		"appointment_id":     info.AppointmentID.String(),
 		"patient_name":      info.PatientName,
 		"current_date":      info.AppointmentDate.Format("2006-01-02"),
 		"current_start_time": info.StartTime.Format("15:04"),
-		"slots":             slots,
+		"status":            info.Status,
+		"slots":             slotsOut,
 	})
 }
 
