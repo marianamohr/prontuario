@@ -37,7 +37,7 @@ const DRAWER_WIDTH = 260
 const DRAWER_WIDTH_COLLAPSED = 64
 
 const navItems: { to: string; end?: boolean; label: string; icon: React.ReactNode; roles?: string[] }[] = [
-  { to: '/', end: true, label: 'Página inicial', icon: <HomeIcon /> },
+  { to: '/home', end: true, label: 'Página inicial', icon: <HomeIcon /> },
   { to: '/patients', label: 'Pacientes', icon: <PeopleIcon />, roles: ['PROFESSIONAL', 'LEGAL_GUARDIAN'] },
   { to: '/agenda', label: 'Agenda', icon: <CalendarMonthIcon />, roles: ['PROFESSIONAL', 'SUPER_ADMIN'] },
   { to: '/appearance', label: 'Aparência', icon: <PaletteIcon />, roles: ['PROFESSIONAL'] },
@@ -106,7 +106,7 @@ export function AppShell() {
       >
         {(!collapsed || isMobile) && (
           <Link
-            to="/"
+            to="/home"
             style={{
               display: 'flex',
               alignItems: 'center',

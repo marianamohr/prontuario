@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Box, CircularProgress } from '@mui/material'
 import { AuthProvider } from './contexts/AuthContext'
 import { BrandingProvider } from './contexts/BrandingContext'
-import { AppShell } from './components/ui/AppShell'
+import { RootLayout } from './components/RootLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
@@ -28,6 +28,7 @@ const Appearance = lazy(() => import('./pages/Appearance').then((m) => ({ defaul
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })))
 const ScheduleConfig = lazy(() => import('./pages/ScheduleConfig').then((m) => ({ default: m.ScheduleConfig })))
 const Agenda = lazy(() => import('./pages/Agenda').then((m) => ({ default: m.Agenda })))
+const Landing = lazy(() => import('./pages/Landing').then((m) => ({ default: m.Landing })))
 
 function PageFallback() {
   return (
@@ -47,9 +48,10 @@ export default function App() {
           <Routes>
           <Route path="verify/:token" element={<VerifyContract />} />
           <Route path="sign-contract" element={<ErrorBoundary><SignContract /></ErrorBoundary>} />
-          <Route path="/" element={<AppShell />}>
-            <Route index element={<Home />} />
+          <Route path="/" element={<RootLayout />}>
+            <Route index element={<Landing />} />
             <Route path="login" element={<Login />} />
+            <Route path="home" element={<Home />} />
             <Route path="admin/login" element={<Navigate to="/login" replace />} />
             <Route path="forgot-password" element={<ForgotPassword />} />
             <Route path="reset-password" element={<ResetPassword />} />

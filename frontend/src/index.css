@@ -1,3 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Landing (Camihealth) CSS variables – used by Tailwind in landing components */
+:root {
+  --background: 150 20% 99%;
+  --foreground: 200 25% 15%;
+  --card: 0 0% 100%;
+  --card-foreground: 200 25% 15%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 200 25% 15%;
+  --primary: 170 45% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 170 25% 95%;
+  --secondary-foreground: 170 45% 30%;
+  --muted: 170 15% 95%;
+  --muted-foreground: 200 10% 45%;
+  --accent: 170 35% 92%;
+  --accent-foreground: 170 45% 25%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 170 15% 90%;
+  --input: 170 15% 90%;
+  --ring: 170 45% 40%;
+  --radius: 0.75rem;
+  --section-alt: 170 15% 97%;
+  --feature-icon-bg: 170 40% 93%;
+  --feature-icon-fg: 170 45% 35%;
+}
+
 :root {
   font-family: 'DM Sans', system-ui, sans-serif;
   line-height: 1.6;

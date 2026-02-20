@@ -334,7 +334,7 @@ export function ContractTemplates() {
   return (
     <PageContainer maxWidth="md">
       <Box sx={{ mb: 1 }}>
-        <Typography component={Link} to="/" sx={{ color: 'primary.main', textDecoration: 'none', fontSize: 14 }}>← Início</Typography>
+        <Typography component={Link} to="/home" sx={{ color: 'primary.main', textDecoration: 'none', fontSize: 14 }}>← Início</Typography>
       </Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
         <Typography variant="h4" fontWeight={700}>Modelos de contrato</Typography>

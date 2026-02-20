@@ -2,7 +2,7 @@ import type { PaletteOptions } from '@mui/material/styles'
 
 /** Cores primárias predefinidas para o seletor de tema */
 export const PRIMARY_PRESETS: Record<string, { main: string; dark?: string; light?: string }> = {
-  default: { main: '#1a1a2e', dark: '#0f0f1a', light: '#2d2d44' },
+  default: { main: '#2d8f7e', dark: '#247268', light: '#4db6ac' },
   blue: { main: '#1976d2', dark: '#1565c0', light: '#42a5f5' },
   teal: { main: '#00796b', dark: '#004d40', light: '#4db6ac' },
   indigo: { main: '#3949ab', dark: '#303f9f', light: '#5c6bc0' },
@@ -21,7 +21,7 @@ export function getPalette(mode: 'light' | 'dark', primaryKey: string): PaletteO
       light: primary.light,
     },
     background: {
-      default: isDark ? '#121212' : '#f8f9fc',
+      default: isDark ? '#121212' : '#f7faf9',
       paper: isDark ? '#1e1e1e' : '#ffffff',
     },
     text: {
