@@ -48,6 +48,7 @@ export function PatientContracts() {
   const [scheduleRules, setScheduleRules] = useState<api.ScheduleRule[]>([])
   const [contractNumAppointments, setContractNumAppointments] = useState<number | ''>('')
   const [availableSlots, setAvailableSlots] = useState<api.AvailableSlotItem[]>([])
+  const [configuredDays, setConfiguredDays] = useState<number[]>([])
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [endingContractId, setEndingContractId] = useState<string | null>(null)
   const [endContractDate, setEndContractDate] = useState('')
@@ -92,8 +93,14 @@ export function PatientContracts() {
     toDate.setDate(toDate.getDate() + 12 * 7)
     const to = toDate.toISOString().slice(0, 10)
     api.listAvailableSlots(from, to)
-      .then((r) => setAvailableSlots(r.slots || []))
-      .catch(() => setAvailableSlots([]))
+      .then((r) => {
+        setAvailableSlots(r.slots || [])
+        setConfiguredDays(r.configured_days ?? [])
+      })
+      .catch(() => {
+        setAvailableSlots([])
+        setConfiguredDays([])
+      })
       .finally(() => setSlotsLoading(false))
   }, [contractModalOpen, canSendContract, contractDataInicio])
 
@@ -136,6 +143,7 @@ export function PatientContracts() {
     setScheduleRules([])
     setContractNumAppointments('')
     setAvailableSlots([])
+    setConfiguredDays([])
     api.listContractTemplates().then((r) => {
       setTemplates(r.templates)
       if (r.templates.length > 0) setSelectedTemplateId(r.templates[0].id)
@@ -504,23 +512,25 @@ export function PatientContracts() {
             {!slotsLoading && availableSlots.length === 0 && contractModalOpen && (
               <Typography variant="body2" color="text.secondary">Configure a agenda em Configurações para escolher horários.</Typography>
             )}
-            {scheduleRules.map((r, i) => {
-              const timesForDay = availableTimesByDay[r.day_of_week] || []
-              const slotTimeValid = timesForDay.includes(r.slot_time)
-              return (
-                <Box key={i} sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                  <FormControl size="small" sx={{ minWidth: 100 }}>
-                    <Select value={r.day_of_week} onChange={(e) => {
-                      const day = Number(e.target.value)
-                      const times = availableTimesByDay[day] || []
-                      const firstTime = times[0] || r.slot_time
-                      setScheduleRules((prev) => prev.map((x, j) => j === i ? { ...x, day_of_week: day, slot_time: firstTime } : x))
-                    }}>
-                      {DAY_NAMES.map((name, d) => (
-                        <MenuItem key={d} value={d}>{name}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+            {(() => {
+              const daysToShow = configuredDays.length > 0 ? configuredDays : [0, 1, 2, 3, 4, 5, 6]
+              return scheduleRules.map((r, i) => {
+                const timesForDay = availableTimesByDay[r.day_of_week] || []
+                const slotTimeValid = timesForDay.includes(r.slot_time)
+                return (
+                  <Box key={i} sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                    <FormControl size="small" sx={{ minWidth: 100 }}>
+                      <Select value={daysToShow.includes(r.day_of_week) ? r.day_of_week : daysToShow[0]} onChange={(e) => {
+                        const day = Number(e.target.value)
+                        const times = availableTimesByDay[day] || []
+                        const firstTime = times[0] || r.slot_time
+                        setScheduleRules((prev) => prev.map((x, j) => j === i ? { ...x, day_of_week: day, slot_time: firstTime } : x))
+                      }}>
+                        {daysToShow.map((d) => (
+                          <MenuItem key={d} value={d}>{DAY_NAMES[d]}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   <FormControl size="small" sx={{ minWidth: 110 }}>
                     <Select
                       value={slotTimeValid ? r.slot_time : (timesForDay[0] ?? '')}
@@ -535,10 +545,12 @@ export function PatientContracts() {
                   </FormControl>
                   <IconButton size="small" color="error" onClick={() => setScheduleRules((prev) => prev.filter((_, j) => j !== i))} aria-label="Remover"><DeleteOutlineIcon fontSize="small" /></IconButton>
                 </Box>
-              )
-            })}
+                )
+              })
+            })()}
             <Button size="small" variant="outlined" disabled={slotsLoading || availableSlots.length === 0} onClick={() => {
-              const firstDay = Object.keys(availableTimesByDay).map(Number).sort((a, b) => a - b)[0] ?? 1
+              const candidateDays = configuredDays.length > 0 ? configuredDays : Object.keys(availableTimesByDay).map(Number).sort((a, b) => a - b)
+              const firstDay = candidateDays.find((d) => (availableTimesByDay[d]?.length ?? 0) > 0) ?? candidateDays[0] ?? 1
               const firstTime = availableTimesByDay[firstDay]?.[0] ?? '09:00'
               setScheduleRules((prev) => [...prev, { day_of_week: firstDay, slot_time: firstTime }])
             }}>+ Adicionar horário</Button>

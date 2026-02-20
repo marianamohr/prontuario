@@ -272,7 +272,7 @@ export function listAppointments(from: string, to: string) {
 export type AvailableSlotItem = { date: string; start_time: string }
 
 export function listAvailableSlots(from: string, to: string) {
-  return api<{ slots: AvailableSlotItem[] }>(`/api/me/available-slots?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+  return api<{ slots: AvailableSlotItem[]; configured_days?: number[] }>(`/api/me/available-slots?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
 }
 
 export type ContractForAgendaItem = { id: string; patient_id: string; patient_name: string; template_name: string }

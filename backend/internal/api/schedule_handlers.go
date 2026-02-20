@@ -162,8 +162,15 @@ func (h *Handler) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
 	for i, s := range slots {
 		out[i] = map[string]string{"date": s.Date, "start_time": s.StartTime}
 	}
+	configs, _ := repo.ListScheduleConfig(r.Context(), h.DB, clinicID)
+	var configuredDays []int
+	for _, c := range configs {
+		if c.Enabled && c.StartTime != nil && c.EndTime != nil && *c.StartTime != "" && *c.EndTime != "" {
+			configuredDays = append(configuredDays, c.DayOfWeek)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"slots": out})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"slots": out, "configured_days": configuredDays})
 }
 
 // PutScheduleConfig atualiza a configuração de um ou mais dias.
