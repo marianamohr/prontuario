@@ -5,10 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useBranding } from '../contexts/BrandingContext'
 import { PageContainer } from '../components/ui/PageContainer'
 import * as api from '../lib/api'
-
-function toYYYYMMDD(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
+import { toBrazilYYYYMMDD } from '../lib/date'
 
 function formatTime(t: string): string {
   if (!t) return '—'
@@ -38,7 +35,7 @@ export function Home() {
       .then((r) => setPendingContracts(r.contracts || []))
       .catch(() => setPendingContracts([]))
       .finally(() => setLoadingContracts(false))
-    const today = toYYYYMMDD(new Date())
+    const today = toBrazilYYYYMMDD(new Date())
     setLoadingAgenda(true)
     api.listAppointments(today, today)
       .then((r) => setTodayAppointments(r.appointments || []))

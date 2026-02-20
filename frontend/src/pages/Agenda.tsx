@@ -21,6 +21,7 @@ import { useTheme, alpha } from '@mui/material/styles'
 import { PageContainer } from '../components/ui/PageContainer'
 import { AppDialog } from '../components/ui/AppDialog'
 import * as api from '../lib/api'
+import { toBrazilYYYYMMDD } from '../lib/date'
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const HOUR_START = 7
@@ -32,17 +33,13 @@ function formatDateBR(s: string) {
   return d.toLocaleDateString('pt-BR')
 }
 
-function getMonday(date: Date): Date {
+function getSunday(date: Date): Date {
   const d = new Date(date)
   const day = d.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  d.setDate(d.getDate() + diff)
+  d.setDate(d.getDate() - day)
   return d
 }
 
-function toYYYYMMDD(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
 
 function addDays(d: Date, n: number): Date {
   const r = new Date(d)
@@ -62,7 +59,7 @@ export function Agenda() {
   const actionColor = user?.role === 'PROFESSIONAL' && branding?.action_button_color ? branding.action_button_color : theme.palette.primary.main
   const [appointments, setAppointments] = useState<api.AppointmentItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [weekStart, setWeekStart] = useState(() => toYYYYMMDD(getMonday(new Date())))
+  const [weekStart, setWeekStart] = useState(() => toBrazilYYYYMMDD(getSunday(new Date(toBrazilYYYYMMDD(new Date()) + 'T12:00:00'))))
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
@@ -79,7 +76,7 @@ export function Agenda() {
   const [popoverId, setPopoverId] = useState<string | null>(null)
 
   const from = weekStart
-  const to = toYYYYMMDD(addDays(new Date(weekStart + 'T12:00:00'), 6))
+  const to = toBrazilYYYYMMDD(addDays(new Date(weekStart + 'T12:00:00'), 6))
 
   const load = useCallback(() => {
     api.listAppointments(from, to)
@@ -141,10 +138,10 @@ export function Agenda() {
           if (r.contracts?.length && !selectedContractId) setSelectedContractId(r.contracts[0].id)
         })
         .catch(() => setContractsForAgenda([]))
-      const from = toYYYYMMDD(new Date())
+      const from = toBrazilYYYYMMDD(new Date())
       const toDate = new Date()
       toDate.setDate(toDate.getDate() + 12 * 7)
-      const to = toYYYYMMDD(toDate)
+      const to = toBrazilYYYYMMDD(toDate)
       api.listAvailableSlots(from, to)
         .then((r) => setCreateAvailableSlots(r.slots || []))
         .catch(() => setCreateAvailableSlots([]))
@@ -201,16 +198,16 @@ export function Agenda() {
     }
   }
 
-  const goPrevWeek = () => setWeekStart(toYYYYMMDD(addDays(new Date(weekStart + 'T12:00:00'), -7)))
-  const goNextWeek = () => setWeekStart(toYYYYMMDD(addDays(new Date(weekStart + 'T12:00:00'), 7)))
-  const goToday = () => setWeekStart(toYYYYMMDD(getMonday(new Date())))
+  const goPrevWeek = () => setWeekStart(toBrazilYYYYMMDD(addDays(new Date(weekStart + 'T12:00:00'), -7)))
+  const goNextWeek = () => setWeekStart(toBrazilYYYYMMDD(addDays(new Date(weekStart + 'T12:00:00'), 7)))
+  const goToday = () => setWeekStart(toBrazilYYYYMMDD(getSunday(new Date(toBrazilYYYYMMDD(new Date()) + 'T12:00:00'))))
 
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(new Date(weekStart + 'T12:00:00'), i))
   const totalHours = HOUR_END - HOUR_START
   const gridHeight = totalHours * PX_PER_HOUR
 
   const appointmentsByDay = weekDates.map((d) => {
-    const key = toYYYYMMDD(d)
+    const key = toBrazilYYYYMMDD(d)
     return appointments.filter((a) => a.appointment_date === key && a.status !== 'CANCELLED')
   })
 
@@ -256,12 +253,15 @@ export function Agenda() {
       ) : (
         <Paper variant="outlined" sx={{ display: 'grid', gridTemplateColumns: '48px repeat(7, minmax(0, 1fr))', gridTemplateRows: `auto ${gridHeight}px`, overflow: 'hidden', minHeight: 400 }}>
           <Box sx={{ gridColumn: 1, gridRow: 1, borderRight: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'grey.50' }} />
-          {weekDates.map((d, j) => (
-            <Box key={j} sx={{ gridColumn: j + 2, gridRow: 1, py: 0.5, textAlign: 'center', borderBottom: 1, borderRight: j < 6 ? 1 : 0, borderColor: 'divider', bgcolor: 'grey.50', fontSize: 13, fontWeight: 500 }}>
-              <Typography variant="caption" color="text.secondary">{DAY_NAMES[d.getDay()]}</Typography>
-              <Typography variant="body2">{d.getDate()}</Typography>
-            </Box>
-          ))}
+          {weekDates.map((d, j) => {
+            const isToday = toBrazilYYYYMMDD(d) === toBrazilYYYYMMDD(new Date())
+            return (
+              <Box key={j} sx={{ gridColumn: j + 2, gridRow: 1, py: 0.5, textAlign: 'center', borderBottom: 1, borderRight: j < 6 ? 1 : 0, borderColor: 'divider', bgcolor: isToday ? 'grey.300' : 'grey.50', fontSize: 13, fontWeight: 500 }}>
+                <Typography variant="caption" color="text.secondary">{DAY_NAMES[d.getDay()]}</Typography>
+                <Typography variant="body2">{d.getDate()}</Typography>
+              </Box>
+            )
+          })}
           <Box sx={{ gridColumn: 1, gridRow: 2, display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
             {Array.from({ length: totalHours }, (_, i) => (
               <Box key={i} sx={{ height: PX_PER_HOUR, pr: 0.35, textAlign: 'right', fontSize: 11, color: 'text.secondary', lineHeight: `${PX_PER_HOUR}px` }}>
@@ -269,7 +269,11 @@ export function Agenda() {
               </Box>
             ))}
           </Box>
-          {weekDates.map((_, dayIndex) => (
+          {weekDates.map((d, dayIndex) => {
+            const isToday = toBrazilYYYYMMDD(d) === toBrazilYYYYMMDD(new Date())
+            const lineColor = theme.palette.grey[isToday ? 400 : 200]
+            const fillColor = isToday ? theme.palette.grey[300] : 'transparent'
+            return (
             <Box
               key={dayIndex}
               role="gridcell"
@@ -279,7 +283,7 @@ export function Agenda() {
                 position: 'relative',
                 borderRight: dayIndex < 6 ? 1 : 0,
                 borderColor: 'divider',
-                background: `repeating-linear-gradient( transparent, transparent ${PX_PER_HOUR - 1}px, ${theme.palette.grey[200]} ${PX_PER_HOUR - 1}px, ${theme.palette.grey[200]} ${PX_PER_HOUR}px)`,
+                background: `repeating-linear-gradient( ${fillColor}, ${fillColor} ${PX_PER_HOUR - 1}px, ${lineColor} ${PX_PER_HOUR - 1}px, ${lineColor} ${PX_PER_HOUR}px)`,
               }}
               onClick={() => setPopoverId(null)}
             >
@@ -339,7 +343,8 @@ export function Agenda() {
                 )
               })}
             </Box>
-          ))}
+            )
+          })}
         </Paper>
       )}
 

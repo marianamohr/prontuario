@@ -22,6 +22,7 @@ import { useTheme } from '@mui/material/styles'
 import { PageContainer } from '../components/ui/PageContainer'
 import { AppDialog } from '../components/ui/AppDialog'
 import * as api from '../lib/api'
+import { toBrazilYYYYMMDD } from '../lib/date'
 
 export function PatientContracts() {
   const theme = useTheme()
@@ -94,10 +95,10 @@ export function PatientContracts() {
     if (!contractModalOpen || !canSendContract) return
     setSlotsLoading(true)
     const fromDate = contractDataInicio ? new Date(contractDataInicio + 'T12:00:00') : new Date()
-    const from = fromDate.toISOString().slice(0, 10)
+    const from = toBrazilYYYYMMDD(fromDate)
     const toDate = new Date(fromDate)
     toDate.setDate(toDate.getDate() + 12 * 7)
-    const to = toDate.toISOString().slice(0, 10)
+    const to = toBrazilYYYYMMDD(toDate)
     api.listAvailableSlots(from, to)
       .then((r) => {
         setAvailableSlots(r.slots || [])
