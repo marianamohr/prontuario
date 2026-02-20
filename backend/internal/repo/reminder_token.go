@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 // ReminderTokenInfo holds valid appointment and guardian for a token.
+// StartTime is string; PostgreSQL TIME is returned as string by the driver.
 type ReminderTokenInfo struct {
 	AppointmentID   uuid.UUID
 	GuardianID      uuid.UUID
@@ -18,28 +18,27 @@ type ReminderTokenInfo struct {
 	PatientID       uuid.UUID
 	PatientName     string
 	AppointmentDate time.Time
-	StartTime       time.Time
+	StartTime       string
 	Status          string
 }
 
 // GetAppointmentByReminderToken validates the token and returns appointment data. Returns nil if invalid or expired.
-func GetAppointmentByReminderToken(ctx context.Context, pool *pgxpool.Pool, token string) (*ReminderTokenInfo, error) {
+func GetAppointmentByReminderToken(ctx context.Context, db *gorm.DB, token string) (*ReminderTokenInfo, error) {
 	var r ReminderTokenInfo
-	err := pool.QueryRow(ctx, `
-		SELECT a.id, t.guardian_id, a.clinic_id, a.professional_id, a.patient_id, COALESCE(p.full_name, ''),
+	err := db.WithContext(ctx).Raw(`
+		SELECT a.id as appointment_id, t.guardian_id, a.clinic_id, a.professional_id, a.patient_id, COALESCE(p.full_name, '') as patient_name,
 		       a.appointment_date, a.start_time, a.status
 		FROM appointment_reminder_tokens t
 		JOIN appointments a ON a.id = t.appointment_id
 		JOIN patients p ON p.id = a.patient_id
-		WHERE t.token = $1 AND t.expires_at > now()
-	`, token).Scan(&r.AppointmentID, &r.GuardianID, &r.ClinicID, &r.ProfessionalID, &r.PatientID, &r.PatientName, &r.AppointmentDate, &r.StartTime, &r.Status)
+		WHERE t.token = ? AND t.expires_at > now()
+	`, token).Scan(&r).Error
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
-		}
 		return nil, err
 	}
-	// Token is trusted: if it exists and is not expired, the (appointment_id, guardian_id) pair is valid.
+	if r.AppointmentID == uuid.Nil {
+		return nil, nil
+	}
 	return &r, nil
 }
 
@@ -51,8 +50,8 @@ type AvailableSlot struct {
 
 // ListAvailableSlotsForProfessional returns available slots for the professional in [from, to].
 // excludeAppointmentID: if non-nil, excludes that appointment from occupied slots (for reschedule).
-func ListAvailableSlotsForProfessional(ctx context.Context, pool *pgxpool.Pool, professionalID, clinicID uuid.UUID, from, to time.Time, excludeAppointmentID *uuid.UUID) ([]AvailableSlot, error) {
-	configs, err := ListScheduleConfig(ctx, pool, clinicID)
+func ListAvailableSlotsForProfessional(ctx context.Context, db *gorm.DB, professionalID, clinicID uuid.UUID, from, to time.Time, excludeAppointmentID *uuid.UUID) ([]AvailableSlot, error) {
+	configs, err := ListScheduleConfig(ctx, db, clinicID)
 	if err != nil {
 		return nil, err
 	}
@@ -60,39 +59,23 @@ func ListAvailableSlotsForProfessional(ctx context.Context, pool *pgxpool.Pool, 
 	for i := range configs {
 		configMap[configs[i].DayOfWeek] = &configs[i]
 	}
-	args := []interface{}{professionalID, clinicID, from, to}
-	q := `
-		SELECT appointment_date, start_time, end_time
-		FROM appointments
-		WHERE professional_id = $1 AND clinic_id = $2
-		  AND appointment_date >= $3 AND appointment_date <= $4
-		  AND status NOT IN ('CANCELLED', 'SERIES_ENDED')
-	`
+	// Padrão GORM: Table + Where + Find (TIME no Postgres vem como string no driver).
+	type occupiedSlot struct {
+		AppointmentDate time.Time `gorm:"column:appointment_date"`
+		StartTime      string    `gorm:"column:start_time"`
+		EndTime        string    `gorm:"column:end_time"`
+	}
+	var existing []occupiedSlot
+	query := db.WithContext(ctx).Table("appointments").
+		Select("appointment_date, start_time, end_time").
+		Where("professional_id = ? AND clinic_id = ? AND appointment_date >= ? AND appointment_date <= ?",
+			professionalID, clinicID, from, to).
+		Where("status NOT IN ?", []string{"CANCELLED", "SERIES_ENDED"})
 	if excludeAppointmentID != nil {
-		q += ` AND id != $5`
-		args = append(args, excludeAppointmentID)
+		query = query.Where("id != ?", *excludeAppointmentID)
 	}
-	appointments, err := pool.Query(ctx, q, args...)
+	err = query.Find(&existing).Error
 	if err != nil {
-		return nil, err
-	}
-	defer appointments.Close()
-	type appt struct {
-		date  time.Time
-		start time.Time
-		end   time.Time
-	}
-	var existing []appt
-	for appointments.Next() {
-		var a appt
-		var d time.Time
-		if err := appointments.Scan(&d, &a.start, &a.end); err != nil {
-			return nil, err
-		}
-		a.date = d
-		existing = append(existing, a)
-	}
-	if err := appointments.Err(); err != nil {
 		return nil, err
 	}
 	var slots []AvailableSlot
@@ -104,6 +87,11 @@ func ListAvailableSlotsForProfessional(ctx context.Context, pool *pgxpool.Pool, 
 		if cfg == nil || !cfg.Enabled || cfg.StartTime == nil || cfg.EndTime == nil {
 			continue
 		}
+		startT := parseTimeOfDay(cfg.StartTime)
+		endT := parseTimeOfDay(cfg.EndTime)
+		if startT == nil || endT == nil {
+			continue
+		}
 		dur := cfg.ConsultationDurationMinutes
 		if dur <= 0 {
 			dur = defaultDuration
@@ -112,32 +100,40 @@ func ListAvailableSlotsForProfessional(ctx context.Context, pool *pgxpool.Pool, 
 		if interval <= 0 {
 			interval = defaultInterval
 		}
-		// slot start in same-day time
-		slotStart := time.Date(0, 1, 1, cfg.StartTime.Hour(), cfg.StartTime.Minute(), 0, 0, time.UTC)
-		endT := time.Date(0, 1, 1, cfg.EndTime.Hour(), cfg.EndTime.Minute(), 0, 0, time.UTC)
-		lunchStart, lunchEnd := cfg.LunchStart, cfg.LunchEnd
-		for slotStart.Before(endT) {
+		slotStart := time.Date(0, 1, 1, startT.Hour(), startT.Minute(), 0, 0, time.UTC)
+		endTVal := time.Date(0, 1, 1, endT.Hour(), endT.Minute(), 0, 0, time.UTC)
+		lunchStart := parseTimeOfDay(cfg.LunchStart)
+		lunchEnd := parseTimeOfDay(cfg.LunchEnd)
+		for slotStart.Before(endTVal) {
 			slotEnd := slotStart.Add(time.Duration(dur) * time.Minute)
-			if slotEnd.After(endT) {
+			if slotEnd.After(endTVal) {
 				break
 			}
 			if lunchStart != nil && lunchEnd != nil {
 				ls := time.Date(0, 1, 1, lunchStart.Hour(), lunchStart.Minute(), 0, 0, time.UTC)
 				le := time.Date(0, 1, 1, lunchEnd.Hour(), lunchEnd.Minute(), 0, 0, time.UTC)
-				if (slotStart.Before(le) && slotEnd.After(ls)) {
+				if slotStart.Before(le) && slotEnd.After(ls) {
 					slotStart = slotStart.Add(time.Duration(interval) * time.Minute)
 					continue
 				}
 			}
-			// check overlap with existing
 			overlaps := false
 			for _, e := range existing {
-				if e.date.Year() != d.Year() || e.date.YearDay() != d.YearDay() {
+				if e.AppointmentDate.Year() != d.Year() || e.AppointmentDate.YearDay() != d.YearDay() {
 					continue
 				}
-				es := time.Date(0, 1, 1, e.start.Hour(), e.start.Minute(), 0, 0, time.UTC)
-				ee := time.Date(0, 1, 1, e.end.Hour(), e.end.Minute(), 0, 0, time.UTC)
-				if slotStart.Before(ee) && slotEnd.After(es) {
+				esT := parseTimeOfDay(&e.StartTime)
+				eeT := parseTimeOfDay(&e.EndTime)
+				if esT == nil || eeT == nil {
+					continue
+				}
+				es := time.Date(0, 1, 1, esT.Hour(), esT.Minute(), 0, 0, time.UTC)
+				ee := time.Date(0, 1, 1, eeT.Hour(), eeT.Minute(), 0, 0, time.UTC)
+				// Respeitar intervalo entre consultas: zona proibida = [es-interval, ee+interval]
+				intervalDur := time.Duration(interval) * time.Minute
+				forbiddenStart := es.Add(-intervalDur)
+				forbiddenEnd := ee.Add(intervalDur)
+				if slotStart.Before(forbiddenEnd) && slotEnd.After(forbiddenStart) {
 					overlaps = true
 					break
 				}
@@ -152,4 +148,19 @@ func ListAvailableSlotsForProfessional(ctx context.Context, pool *pgxpool.Pool, 
 		}
 	}
 	return slots, nil
+}
+
+// parseTimeOfDay interpreta "HH:MM" ou "HH:MM:SS" em *string e retorna *time.Time (só hora utilizada).
+func parseTimeOfDay(s *string) *time.Time {
+	if s == nil || *s == "" {
+		return nil
+	}
+	t, err := time.Parse("15:04:05", *s)
+	if err != nil {
+		t, err = time.Parse("15:04", *s)
+	}
+	if err != nil {
+		return nil
+	}
+	return &t
 }

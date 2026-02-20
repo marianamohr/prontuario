@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 	"github.com/prontuario/backend/internal/repo"
 )
 
@@ -146,11 +146,11 @@ func FormatAddressToLines(a *repo.Address) string {
 }
 
 // FormatGuardianAddressForContract retorna o endereço do responsável formatado em linhas para preencher [RESPONSAVEL_ENDERECO] no contrato.
-func FormatGuardianAddressForContract(ctx context.Context, pool *pgxpool.Pool, guardian *repo.LegalGuardian) string {
+func FormatGuardianAddressForContract(ctx context.Context, db *gorm.DB, guardian *repo.LegalGuardian) string {
 	if guardian == nil || guardian.AddressID == nil {
 		return ""
 	}
-	addr, err := repo.GetAddressByID(ctx, pool, *guardian.AddressID)
+	addr, err := repo.GetAddressByID(ctx, db, *guardian.AddressID)
 	if err != nil {
 		return ""
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/backend/internal/api"
 	"github.com/prontuario/backend/internal/auth"
 	"github.com/prontuario/backend/internal/cache"
@@ -19,6 +19,8 @@ import (
 	"github.com/prontuario/backend/internal/middleware"
 	"github.com/prontuario/backend/internal/migrate"
 	"github.com/prontuario/backend/internal/seed"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -28,33 +30,35 @@ func main() {
 		port = "8080"
 	}
 
-	var pool *pgxpool.Pool
+	var gormDB *gorm.DB
+	var sqlDB *sql.DB
 	if cfg.DatabaseURL != "" {
-		poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+		var err error
+		gormDB, err = gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
 		if err != nil {
-			log.Fatalf("config postgres: %v", err)
+			log.Fatalf("gorm open: %v", err)
 		}
+		sqlDB, err = gormDB.DB()
+		if err != nil {
+			log.Fatalf("gorm db: %v", err)
+		}
+		defer func() { _ = sqlDB.Close() }()
 		if cfg.DBMaxConns > 0 {
-			poolConfig.MaxConns = int32(cfg.DBMaxConns)
+			sqlDB.SetMaxOpenConns(cfg.DBMaxConns)
 		}
 		if cfg.DBMinConns > 0 {
-			poolConfig.MinConns = int32(cfg.DBMinConns)
+			sqlDB.SetMaxIdleConns(cfg.DBMinConns)
 		}
 		if cfg.DBMaxConnLifetime > 0 {
-			poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
+			sqlDB.SetConnMaxLifetime(cfg.DBMaxConnLifetime)
 		}
-		pool, err = pgxpool.NewWithConfig(context.Background(), poolConfig)
-		if err != nil {
-			log.Fatalf("conexão postgres: %v", err)
-		}
-		defer pool.Close()
-		if err := pool.Ping(context.Background()); err != nil {
+		if err := sqlDB.PingContext(context.Background()); err != nil {
 			log.Fatalf("ping postgres: %v", err)
 		}
-		if err := migrate.Run(context.Background(), pool, "migrations"); err != nil {
+		if err := migrate.Run(context.Background(), gormDB, "migrations"); err != nil {
 			log.Fatalf("migrations: %v", err)
 		}
-		if err := seed.Run(context.Background(), pool); err != nil {
+		if err := seed.Run(context.Background(), gormDB); err != nil {
 			log.Printf("seed (ignored if already applied): %v", err)
 		}
 	}
@@ -68,12 +72,12 @@ func main() {
 	}).Methods(http.MethodGet)
 
 	r.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
-		if pool == nil {
+		if gormDB == nil || sqlDB == nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"status":"no database"}`))
 			return
 		}
-		if err := pool.Ping(context.Background()); err != nil {
+		if err := sqlDB.PingContext(context.Background()); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"status":"db unhealthy"}`))
 			return
@@ -83,7 +87,7 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	}).Methods(http.MethodGet)
 
-	h := &api.Handler{Pool: pool, Cfg: cfg, Cache: cache.New(30 * time.Second)}
+	h := &api.Handler{DB: gormDB, Cfg: cfg, Cache: cache.New(30 * time.Second)}
 	h.SetHashPassword(auth.HashPassword)
 	if cfg.AppPublicURL != "" {
 		mailCfg := &email.Config{

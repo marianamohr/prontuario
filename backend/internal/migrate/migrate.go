@@ -8,13 +8,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
-// Run aplica todas as migrations pendentes no diretório migrationsDir (ex: "migrations").
-func Run(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) error {
-	ensureSchemaMigrations(ctx, pool)
-	applied, err := appliedVersions(ctx, pool)
+// Run applies all pending migrations in migrationsDir (e.g. "migrations").
+func Run(ctx context.Context, db *gorm.DB, migrationsDir string) error {
+	ensureSchemaMigrations(ctx, db)
+	applied, err := appliedVersions(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -39,41 +39,35 @@ func Run(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
-		_, err = pool.Exec(ctx, string(raw))
-		if err != nil {
+		if err := db.WithContext(ctx).Exec(string(raw)).Error; err != nil {
 			return fmt.Errorf("apply %s: %w", name, err)
 		}
-		_, err = pool.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version)
-		if err != nil {
+		if err := db.WithContext(ctx).Exec("INSERT INTO schema_migrations (version) VALUES (?)", version).Error; err != nil {
 			return fmt.Errorf("record migration %s: %w", name, err)
 		}
 	}
 	return nil
 }
 
-func ensureSchemaMigrations(ctx context.Context, pool *pgxpool.Pool) {
-	_, err := pool.Exec(ctx, `
+func ensureSchemaMigrations(ctx context.Context, db *gorm.DB) {
+	_ = db.WithContext(ctx).Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		)
-	`)
-	_ = err
+	`).Error
 }
 
-func appliedVersions(ctx context.Context, pool *pgxpool.Pool) (map[string]bool, error) {
-	rows, err := pool.Query(ctx, "SELECT version FROM schema_migrations")
-	if err != nil {
+func appliedVersions(ctx context.Context, db *gorm.DB) (map[string]bool, error) {
+	var rows []struct {
+		Version string `gorm:"column:version"`
+	}
+	if err := db.WithContext(ctx).Raw("SELECT version FROM schema_migrations").Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	m := make(map[string]bool)
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err != nil {
-			return nil, err
-		}
-		m[v] = true
+	for _, r := range rows {
+		m[r.Version] = true
 	}
-	return m, rows.Err()
+	return m, nil
 }

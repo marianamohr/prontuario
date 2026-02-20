@@ -5,20 +5,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
-func GetOrCreateMedicalRecord(ctx context.Context, pool *pgxpool.Pool, patientID uuid.UUID) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := pool.QueryRow(ctx, `SELECT id FROM medical_records WHERE patient_id = $1`, patientID).Scan(&id)
-	if err == nil {
-		return id, nil
+func GetOrCreateMedicalRecord(ctx context.Context, db *gorm.DB, patientID uuid.UUID) (uuid.UUID, error) {
+	var res struct{ ID uuid.UUID }
+	err := db.WithContext(ctx).Raw(`SELECT id FROM medical_records WHERE patient_id = ?`, patientID).Scan(&res).Error
+	if err == nil && res.ID != uuid.Nil {
+		return res.ID, nil
 	}
-	err = pool.QueryRow(ctx, `INSERT INTO medical_records (patient_id) VALUES ($1) ON CONFLICT (patient_id) DO UPDATE SET updated_at = now() RETURNING id`, patientID).Scan(&id)
+	err = db.WithContext(ctx).Raw(`INSERT INTO medical_records (patient_id) VALUES (?) ON CONFLICT (patient_id) DO UPDATE SET updated_at = now() RETURNING id`, patientID).Scan(&res).Error
 	if err != nil {
-		return id, err
+		return res.ID, err
 	}
-	return id, nil
+	return res.ID, nil
 }
 
 type RecordEntry struct {
@@ -33,65 +33,57 @@ type RecordEntry struct {
 	CreatedAt         time.Time
 }
 
-func RecordEntriesByMedicalRecord(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID) ([]RecordEntry, error) {
-	list, _, err := RecordEntriesByMedicalRecordPaginated(ctx, pool, medicalRecordID, 0, 0)
+func RecordEntriesByMedicalRecord(ctx context.Context, db *gorm.DB, medicalRecordID uuid.UUID) ([]RecordEntry, error) {
+	list, _, err := RecordEntriesByMedicalRecordPaginated(ctx, db, medicalRecordID, 0, 0)
 	return list, err
 }
 
 // RecordEntriesByMedicalRecordPaginated returns record entries with limit/offset. If limit is 0, no limit.
-func RecordEntriesByMedicalRecordPaginated(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID, limit, offset int) ([]RecordEntry, int, error) {
+func RecordEntriesByMedicalRecordPaginated(ctx context.Context, db *gorm.DB, medicalRecordID uuid.UUID, limit, offset int) ([]RecordEntry, int, error) {
 	var total int
-	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM record_entries WHERE medical_record_id = $1`, medicalRecordID).Scan(&total); err != nil {
+	if err := db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM record_entries WHERE medical_record_id = ?`, medicalRecordID).Scan(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	q := `
 		SELECT id, medical_record_id, content_encrypted, content_nonce, content_key_version, entry_date, author_id, author_type, created_at
-		FROM record_entries WHERE medical_record_id = $1 ORDER BY entry_date DESC, created_at DESC
+		FROM record_entries WHERE medical_record_id = ? ORDER BY entry_date DESC, created_at DESC
 	`
 	args := []interface{}{medicalRecordID}
 	if limit > 0 {
-		q += ` LIMIT $2 OFFSET $3`
+		q += ` LIMIT ? OFFSET ?`
 		args = append(args, limit, offset)
 	}
-	rows, err := pool.Query(ctx, q, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
 	var list []RecordEntry
-	for rows.Next() {
-		var e RecordEntry
-		if err := rows.Scan(&e.ID, &e.MedicalRecordID, &e.ContentEncrypted, &e.ContentNonce, &e.ContentKeyVersion, &e.EntryDate, &e.AuthorID, &e.AuthorType, &e.CreatedAt); err != nil {
-			return nil, 0, err
-		}
-		list = append(list, e)
-	}
-	return list, total, rows.Err()
+	err := db.WithContext(ctx).Raw(q, args...).Scan(&list).Error
+	return list, total, err
 }
 
-func CreateRecordEntry(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID, contentEncrypted, contentNonce []byte, contentKeyVersion string, entryDate time.Time, authorID uuid.UUID, authorType string) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := pool.QueryRow(ctx, `
+func CreateRecordEntry(ctx context.Context, db *gorm.DB, medicalRecordID uuid.UUID, contentEncrypted, contentNonce []byte, contentKeyVersion string, entryDate time.Time, authorID uuid.UUID, authorType string) (uuid.UUID, error) {
+	var res struct{ ID uuid.UUID }
+	err := db.WithContext(ctx).Raw(`
 		INSERT INTO record_entries (medical_record_id, content_encrypted, content_nonce, content_key_version, entry_date, author_id, author_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id
-	`, medicalRecordID, contentEncrypted, contentNonce, contentKeyVersion, entryDate, authorID, authorType).Scan(&id)
-	return id, err
+		VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id
+	`, medicalRecordID, contentEncrypted, contentNonce, contentKeyVersion, entryDate, authorID, authorType).Scan(&res).Error
+	return res.ID, err
 }
 
-func RecordEntryByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*RecordEntry, error) {
+func RecordEntryByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*RecordEntry, error) {
 	var e RecordEntry
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, medical_record_id, content_encrypted, content_nonce, content_key_version, entry_date, author_id, author_type, created_at
-		FROM record_entries WHERE id = $1
-	`, id).Scan(&e.ID, &e.MedicalRecordID, &e.ContentEncrypted, &e.ContentNonce, &e.ContentKeyVersion, &e.EntryDate, &e.AuthorID, &e.AuthorType, &e.CreatedAt)
+		FROM record_entries WHERE id = ?
+	`, id).Scan(&e).Error
 	if err != nil {
 		return nil, err
+	}
+	if e.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &e, nil
 }
 
-func PatientIDByMedicalRecordID(ctx context.Context, pool *pgxpool.Pool, medicalRecordID uuid.UUID) (uuid.UUID, error) {
-	var patientID uuid.UUID
-	err := pool.QueryRow(ctx, `SELECT patient_id FROM medical_records WHERE id = $1`, medicalRecordID).Scan(&patientID)
-	return patientID, err
+func PatientIDByMedicalRecordID(ctx context.Context, db *gorm.DB, medicalRecordID uuid.UUID) (uuid.UUID, error) {
+	var res struct{ PatientID uuid.UUID }
+	err := db.WithContext(ctx).Raw(`SELECT patient_id FROM medical_records WHERE id = ?`, medicalRecordID).Scan(&res).Error
+	return res.PatientID, err
 }

@@ -106,7 +106,27 @@ func (h *Handler) BackofficeTimeline(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := h.Pool.Query(r.Context(), `
+	var timelineScan []struct {
+		Kind                   string
+		ID                     string
+		Action                 string
+		ActorType              string
+		ActorID                *string
+		ClinicID               *string
+		RequestID              *string
+		IP                     *string
+		UserAgent              *string
+		ResourceType           *string
+		ResourceID             *string
+		PatientID              *string
+		IsImpersonated         bool
+		ImpersonationSessionID *string
+		Source                 string
+		Severity               string
+		Metadata               []byte
+		CreatedAt              time.Time
+	}
+	err := h.DB.WithContext(r.Context()).Raw(`
 		WITH timeline AS (
 			SELECT
 				'AUDIT'::text AS kind,
@@ -128,16 +148,16 @@ func (h *Handler) BackofficeTimeline(w http.ResponseWriter, r *http.Request) {
 				COALESCE(metadata, '{}'::jsonb) AS metadata,
 				created_at
 			FROM audit_events
-			WHERE ($1::timestamptz IS NULL OR created_at >= $1)
-			  AND ($2::timestamptz IS NULL OR created_at <= $2)
-			  AND ($3::text IS NULL OR request_id = $3)
-			  AND ($4::text IS NULL OR UPPER(severity) = $4)
-			  AND ($5::text IS NULL OR UPPER(source) = $5)
-			  AND ($6::uuid IS NULL OR actor_id = $6)
-			  AND ($7::uuid IS NULL OR clinic_id = $7)
-			  AND ($8::uuid IS NULL OR patient_id = $8)
-			  AND ($9::text IS NULL OR resource_type = $9)
-			  AND ($10::uuid IS NULL OR resource_id = $10)
+			WHERE (?::timestamptz IS NULL OR created_at >= ?)
+			  AND (?::timestamptz IS NULL OR created_at <= ?)
+			  AND (?::text IS NULL OR request_id = ?)
+			  AND (?::text IS NULL OR UPPER(severity) = ?)
+			  AND (?::text IS NULL OR UPPER(source) = ?)
+			  AND (?::uuid IS NULL OR actor_id = ?)
+			  AND (?::uuid IS NULL OR clinic_id = ?)
+			  AND (?::uuid IS NULL OR patient_id = ?)
+			  AND (?::text IS NULL OR resource_type = ?)
+			  AND (?::uuid IS NULL OR resource_id = ?)
 
 			UNION ALL
 
@@ -161,60 +181,52 @@ func (h *Handler) BackofficeTimeline(w http.ResponseWriter, r *http.Request) {
 				jsonb_build_object('action', action) AS metadata,
 				created_at
 			FROM access_logs
-			WHERE ($1::timestamptz IS NULL OR created_at >= $1)
-			  AND ($2::timestamptz IS NULL OR created_at <= $2)
-			  AND ($3::text IS NULL OR request_id = $3)
-			  AND ($6::uuid IS NULL OR actor_id = $6)
-			  AND ($7::uuid IS NULL OR clinic_id = $7)
-			  AND ($8::uuid IS NULL OR patient_id = $8)
-			  AND ($9::text IS NULL OR resource_type = $9)
-			  AND ($10::uuid IS NULL OR resource_id = $10)
+			WHERE (?::timestamptz IS NULL OR created_at >= ?)
+			  AND (?::timestamptz IS NULL OR created_at <= ?)
+			  AND (?::text IS NULL OR request_id = ?)
+			  AND (?::uuid IS NULL OR actor_id = ?)
+			  AND (?::uuid IS NULL OR clinic_id = ?)
+			  AND (?::uuid IS NULL OR patient_id = ?)
+			  AND (?::text IS NULL OR resource_type = ?)
+			  AND (?::uuid IS NULL OR resource_id = ?)
 		)
 		SELECT kind, id, action, actor_type, actor_id, clinic_id, request_id, ip, user_agent, resource_type, resource_id, patient_id,
 		       is_impersonated, impersonation_session_id, source, severity, metadata, created_at
 		FROM timeline
 		ORDER BY created_at DESC
-		LIMIT $11 OFFSET $12
-	`, from, to,
-		nullIfEmpty(requestID),
-		nullIfEmpty(severity),
-		nullIfEmpty(source),
-		actorUUID,
-		clinicUUID,
-		patientUUID,
-		nullIfEmpty(resourceType),
-		resourceUUID,
+		LIMIT ? OFFSET ?
+	`, from, to, from, to,
+		nullIfEmpty(requestID), nullIfEmpty(requestID),
+		nullIfEmpty(severity), nullIfEmpty(severity),
+		nullIfEmpty(source), nullIfEmpty(source),
+		actorUUID, actorUUID,
+		clinicUUID, clinicUUID,
+		patientUUID, patientUUID,
+		nullIfEmpty(resourceType), nullIfEmpty(resourceType),
+		resourceUUID, resourceUUID,
+		from, to, from, to,
+		nullIfEmpty(requestID), nullIfEmpty(requestID),
+		actorUUID, actorUUID,
+		clinicUUID, clinicUUID,
+		patientUUID, patientUUID,
+		nullIfEmpty(resourceType), nullIfEmpty(resourceType),
+		resourceUUID, resourceUUID,
 		limit, offset,
-	)
+	).Scan(&timelineScan).Error
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-
-	var out []timelineRow
-	for rows.Next() {
-		var row timelineRow
-		var actorID, clinicID, requestID, ip, ua, rType, rID, pID, impSID *string
-		var meta []byte
-		var created time.Time
-		if err := rows.Scan(&row.Kind, &row.ID, &row.Action, &row.ActorType, &actorID, &clinicID, &requestID, &ip, &ua, &rType, &rID, &pID,
-			&row.IsImpersonated, &impSID, &row.Source, &row.Severity, &meta, &created); err != nil {
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-			return
+	out := make([]timelineRow, len(timelineScan))
+	for i := range timelineScan {
+		r := &timelineScan[i]
+		out[i] = timelineRow{
+			Kind: r.Kind, ID: r.ID, Action: r.Action, ActorType: r.ActorType,
+			ActorID: r.ActorID, ClinicID: r.ClinicID, RequestID: r.RequestID,
+			IP: r.IP, UserAgent: r.UserAgent, ResourceType: r.ResourceType, ResourceID: r.ResourceID, PatientID: r.PatientID,
+			IsImpersonated: r.IsImpersonated, ImpersonationSessionID: r.ImpersonationSessionID,
+			Source: r.Source, Severity: r.Severity, Metadata: r.Metadata, CreatedAt: r.CreatedAt.Format(time.RFC3339),
 		}
-		row.ActorID = actorID
-		row.ClinicID = clinicID
-		row.RequestID = requestID
-		row.IP = ip
-		row.UserAgent = ua
-		row.ResourceType = rType
-		row.ResourceID = rID
-		row.PatientID = pID
-		row.ImpersonationSessionID = impSID
-		row.Metadata = meta
-		row.CreatedAt = created.Format(time.RFC3339)
-		out = append(out, row)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -284,37 +296,51 @@ func (h *Handler) BackofficeErrors(w http.ResponseWriter, r *http.Request) {
 	severity := strings.ToUpper(strings.TrimSpace(q.Get("severity")))
 	source := strings.ToUpper(strings.TrimSpace(q.Get("source")))
 
-	rows, err := h.Pool.Query(r.Context(), `
+	var scanRows []struct {
+		ID         string
+		CreatedAt  time.Time
+		RequestID  *string
+		Source     string
+		Severity   string
+		ClinicID   *string
+		ActorType  *string
+		ActorID    *string
+		Path       *string
+		Method     *string
+		ActionName *string
+		Kind       *string
+		Message    *string
+		Stack      *string
+		PGCode     *string
+		PGMessage  *string
+		Metadata   []byte
+	}
+	err := h.DB.WithContext(r.Context()).Raw(`
 		SELECT id::text, created_at, request_id, source, severity, clinic_id::text, actor_type, actor_id::text,
 		       path, http_method, action_name, kind, message, stack, pg_code, pg_message,
 		       COALESCE(metadata, '{}'::jsonb) AS metadata
 		FROM error_events
-		WHERE ($1::timestamptz IS NULL OR created_at >= $1)
-		  AND ($2::timestamptz IS NULL OR created_at <= $2)
-		  AND ($3::text IS NULL OR request_id = $3)
-		  AND ($4::text IS NULL OR UPPER(severity) = $4)
-		  AND ($5::text IS NULL OR UPPER(source) = $5)
+		WHERE (?::timestamptz IS NULL OR created_at >= ?)
+		  AND (?::timestamptz IS NULL OR created_at <= ?)
+		  AND (?::text IS NULL OR request_id = ?)
+		  AND (?::text IS NULL OR UPPER(severity) = ?)
+		  AND (?::text IS NULL OR UPPER(source) = ?)
 		ORDER BY created_at DESC
-		LIMIT $6 OFFSET $7
-	`, from, to, nullIfEmpty(requestID), nullIfEmpty(severity), nullIfEmpty(source), limit, offset)
+		LIMIT ? OFFSET ?
+	`, from, to, from, to, nullIfEmpty(requestID), nullIfEmpty(severity), nullIfEmpty(source), limit, offset).Scan(&scanRows).Error
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-	var out []errorEventRow
-	for rows.Next() {
-		var row errorEventRow
-		var created time.Time
-		var meta []byte
-		if err := rows.Scan(&row.ID, &created, &row.RequestID, &row.Source, &row.Severity, &row.ClinicID, &row.ActorType, &row.ActorID,
-			&row.Path, &row.Method, &row.ActionName, &row.Kind, &row.Message, &row.Stack, &row.PGCode, &row.PGMessage, &meta); err != nil {
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-			return
+	out := make([]errorEventRow, len(scanRows))
+	for i := range scanRows {
+		r := &scanRows[i]
+		out[i] = errorEventRow{
+			ID: r.ID, CreatedAt: r.CreatedAt.Format(time.RFC3339), RequestID: r.RequestID, Source: r.Source, Severity: r.Severity,
+			ClinicID: r.ClinicID, ActorType: r.ActorType, ActorID: r.ActorID, Path: r.Path,
+			Method: r.Method, ActionName: r.ActionName, Kind: r.Kind, Message: r.Message, Stack: r.Stack,
+			PGCode: r.PGCode, PGMessage: r.PGMessage, Metadata: r.Metadata,
 		}
-		row.CreatedAt = created.Format(time.RFC3339)
-		row.Metadata = meta
-		out = append(out, row)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"items": out, "limit": limit, "offset": offset})

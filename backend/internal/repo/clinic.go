@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type Clinic struct {
@@ -27,37 +27,39 @@ type ClinicBranding struct {
 	NegationButtonColor *string
 }
 
-func ClinicByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Clinic, error) {
+func ClinicByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*Clinic, error) {
 	var c Clinic
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, name, primary_color, background_color, home_label, home_image_url, action_button_color, negation_button_color
-		FROM clinics WHERE id = $1
-	`, id).Scan(&c.ID, &c.Name, &c.PrimaryColor, &c.BackgroundColor, &c.HomeLabel, &c.HomeImageURL, &c.ActionButtonColor, &c.NegationButtonColor)
+		FROM clinics WHERE id = ?
+	`, id).Scan(&c).Error
 	if err != nil {
 		return nil, err
+	}
+	if c.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &c, nil
 }
 
-func GetClinicBranding(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) (*ClinicBranding, error) {
+func GetClinicBranding(ctx context.Context, db *gorm.DB, clinicID uuid.UUID) (*ClinicBranding, error) {
 	var b ClinicBranding
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT primary_color, background_color, home_label, home_image_url, action_button_color, negation_button_color
-		FROM clinics WHERE id = $1
-	`, clinicID).Scan(&b.PrimaryColor, &b.BackgroundColor, &b.HomeLabel, &b.HomeImageURL, &b.ActionButtonColor, &b.NegationButtonColor)
+		FROM clinics WHERE id = ?
+	`, clinicID).Scan(&b).Error
 	if err != nil {
 		return nil, err
 	}
 	return &b, nil
 }
 
-func UpdateClinicBranding(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, b *ClinicBranding) error {
-	_, err := pool.Exec(ctx, `
+func UpdateClinicBranding(ctx context.Context, db *gorm.DB, clinicID uuid.UUID, b *ClinicBranding) error {
+	return db.WithContext(ctx).Exec(`
 		UPDATE clinics SET
-			primary_color = $1, background_color = $2, home_label = $3, home_image_url = $4,
-			action_button_color = $5, negation_button_color = $6,
+			primary_color = ?, background_color = ?, home_label = ?, home_image_url = ?,
+			action_button_color = ?, negation_button_color = ?,
 			updated_at = now()
-		WHERE id = $7
-	`, b.PrimaryColor, b.BackgroundColor, b.HomeLabel, b.HomeImageURL, b.ActionButtonColor, b.NegationButtonColor, clinicID)
-	return err
+		WHERE id = ?
+	`, b.PrimaryColor, b.BackgroundColor, b.HomeLabel, b.HomeImageURL, b.ActionButtonColor, b.NegationButtonColor, clinicID).Error
 }

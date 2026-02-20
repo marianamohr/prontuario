@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type Contract struct {
@@ -36,196 +35,126 @@ type Contract struct {
 	NumAppointments   *int       // quantidade de agendamentos a criar ao assinar (nil = sem limite)
 }
 
-func scanContractRow(c *Contract, profID *uuid.UUID, signedAt *time.Time, pdfURL, pdfSHA, verTok *string, audit []byte, startDate, endDate *time.Time, valor, periodicidade *string, signPlace *string, signDate *time.Time, numAppointments *int) {
-	c.ProfessionalID = profID
-	c.SignedAt = signedAt
-	c.PDFURL = pdfURL
-	c.PDFSHA256 = pdfSHA
-	c.AuditJSON = audit
-	c.VerificationToken = verTok
-	c.StartDate = startDate
-	c.EndDate = endDate
-	c.Valor = valor
-	c.Periodicidade = periodicidade
-	c.SignPlace = signPlace
-	c.SignDate = signDate
-	c.NumAppointments = numAppointments
-}
-
-func ContractsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) ([]Contract, error) {
-	list, _, err := ContractsByClinicPaginated(ctx, pool, clinicID, 0, 0)
+func ContractsByClinic(ctx context.Context, db *gorm.DB, clinicID uuid.UUID) ([]Contract, error) {
+	list, _, err := ContractsByClinicPaginated(ctx, db, clinicID, 0, 0)
 	return list, err
 }
 
-func ContractsByClinicPaginated(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, limit, offset int) ([]Contract, int, error) {
+func ContractsByClinicPaginated(ctx context.Context, db *gorm.DB, clinicID uuid.UUID, limit, offset int) ([]Contract, int, error) {
 	var total int
-	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM contracts WHERE clinic_id = $1 AND deleted_at IS NULL`, clinicID).Scan(&total); err != nil {
+	if err := db.WithContext(ctx).Raw(`SELECT COUNT(*) FROM contracts WHERE clinic_id = ? AND deleted_at IS NULL`, clinicID).Scan(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	q := `
 		SELECT id, clinic_id, patient_id, legal_guardian_id, professional_id, template_id, signer_relation, signer_is_patient, status, signed_at, pdf_url, pdf_sha256, audit_json, template_version, verification_token, start_date, end_date, valor, periodicidade, sign_place, sign_date, num_appointments
-		FROM contracts WHERE clinic_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC
+		FROM contracts WHERE clinic_id = ? AND deleted_at IS NULL ORDER BY created_at DESC
 	`
 	args := []interface{}{clinicID}
 	if limit > 0 {
-		q += ` LIMIT $2 OFFSET $3`
+		q += ` LIMIT ? OFFSET ?`
 		args = append(args, limit, offset)
 	}
-	rows, err := pool.Query(ctx, q, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
 	var list []Contract
-	for rows.Next() {
-		var c Contract
-		var profID *uuid.UUID
-		var signedAt *time.Time
-		var pdfURL, pdfSHA, verTok *string
-		var audit []byte
-		var startDate, endDate *time.Time
-		var valor, periodicidade, signPlace *string
-		var signDate *time.Time
-		var numAppointments *int
-		if err := rows.Scan(&c.ID, &c.ClinicID, &c.PatientID, &c.LegalGuardianID, &profID, &c.TemplateID, &c.SignerRelation, &c.SignerIsPatient, &c.Status, &signedAt, &pdfURL, &pdfSHA, &audit, &c.TemplateVersion, &verTok, &startDate, &endDate, &valor, &periodicidade, &signPlace, &signDate, &numAppointments); err != nil {
-			return nil, 0, err
-		}
-		scanContractRow(&c, profID, signedAt, pdfURL, pdfSHA, verTok, audit, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments)
-		list = append(list, c)
-	}
-	return list, total, rows.Err()
+	err := db.WithContext(ctx).Raw(q, args...).Scan(&list).Error
+	return list, total, err
 }
 
-func ContractByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Contract, error) {
+func ContractByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*Contract, error) {
 	var c Contract
-	var profID *uuid.UUID
-	var signedAt *time.Time
-	var pdfURL, pdfSHA, verTok *string
-	var audit []byte
-	var startDate, endDate *time.Time
-	var valor, periodicidade, signPlace *string
-	var signDate *time.Time
-	var numAppointments *int
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, patient_id, legal_guardian_id, professional_id, template_id, signer_relation, signer_is_patient, status, signed_at, pdf_url, pdf_sha256, audit_json, template_version, verification_token, start_date, end_date, valor, periodicidade, sign_place, sign_date, num_appointments
-		FROM contracts WHERE id = $1
-	`, id).Scan(&c.ID, &c.ClinicID, &c.PatientID, &c.LegalGuardianID, &profID, &c.TemplateID, &c.SignerRelation, &c.SignerIsPatient, &c.Status, &signedAt, &pdfURL, &pdfSHA, &audit, &c.TemplateVersion, &verTok, &startDate, &endDate, &valor, &periodicidade, &signPlace, &signDate, &numAppointments)
+		FROM contracts WHERE id = ?
+	`, id).Scan(&c).Error
 	if err != nil {
 		return nil, err
 	}
-	scanContractRow(&c, profID, signedAt, pdfURL, pdfSHA, verTok, audit, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments)
+	if c.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &c, nil
 }
 
-func ContractByIDAndClinic(ctx context.Context, pool *pgxpool.Pool, id, clinicID uuid.UUID) (*Contract, error) {
+func ContractByIDAndClinic(ctx context.Context, db *gorm.DB, id, clinicID uuid.UUID) (*Contract, error) {
 	var c Contract
-	var profID *uuid.UUID
-	var signedAt *time.Time
-	var pdfURL, pdfSHA, verTok *string
-	var audit []byte
-	var startDate, endDate *time.Time
-	var valor, periodicidade, signPlace *string
-	var signDate *time.Time
-	var numAppointments *int
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, patient_id, legal_guardian_id, professional_id, template_id, signer_relation, signer_is_patient, status, signed_at, pdf_url, pdf_sha256, audit_json, template_version, verification_token, start_date, end_date, valor, periodicidade, sign_place, sign_date, num_appointments
-		FROM contracts WHERE id = $1 AND clinic_id = $2 AND deleted_at IS NULL
-	`, id, clinicID).Scan(&c.ID, &c.ClinicID, &c.PatientID, &c.LegalGuardianID, &profID, &c.TemplateID, &c.SignerRelation, &c.SignerIsPatient, &c.Status, &signedAt, &pdfURL, &pdfSHA, &audit, &c.TemplateVersion, &verTok, &startDate, &endDate, &valor, &periodicidade, &signPlace, &signDate, &numAppointments)
+		FROM contracts WHERE id = ? AND clinic_id = ? AND deleted_at IS NULL
+	`, id, clinicID).Scan(&c).Error
 	if err != nil {
 		return nil, err
 	}
-	scanContractRow(&c, profID, signedAt, pdfURL, pdfSHA, verTok, audit, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments)
+	if c.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &c, nil
 }
 
-func ContractByAccessToken(ctx context.Context, pool *pgxpool.Pool, token string) (*Contract, *ContractTemplate, *Patient, *LegalGuardian, error) {
-	var contractID uuid.UUID
-	err := pool.QueryRow(ctx, `SELECT contract_id FROM contract_access_tokens WHERE token = $1 AND expires_at > now() AND used_at IS NULL`, token).Scan(&contractID)
+func ContractByAccessToken(ctx context.Context, db *gorm.DB, token string) (*Contract, *ContractTemplate, *Patient, *LegalGuardian, error) {
+	var res struct{ ContractID uuid.UUID }
+	err := db.WithContext(ctx).Raw(`SELECT contract_id FROM contract_access_tokens WHERE token = ? AND expires_at > now() AND used_at IS NULL`, token).Scan(&res).Error
+	if err != nil || res.ContractID == uuid.Nil {
+		return nil, nil, nil, nil, err
+	}
+	c, err := ContractByID(ctx, db, res.ContractID)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	var c Contract
-	var profID *uuid.UUID
-	var signedAt *time.Time
-	var pdfURL, pdfSHA, verTok *string
-	var audit []byte
-	var startDate, endDate *time.Time
-	var valor, periodicidade, signPlace *string
-	var signDate *time.Time
-	var numAppointments *int
-	err = pool.QueryRow(ctx, `
-		SELECT id, clinic_id, patient_id, legal_guardian_id, professional_id, template_id, signer_relation, signer_is_patient, status, signed_at, pdf_url, pdf_sha256, audit_json, template_version, verification_token, start_date, end_date, valor, periodicidade, sign_place, sign_date, num_appointments
-		FROM contracts WHERE id = $1 AND deleted_at IS NULL
-	`, contractID).Scan(&c.ID, &c.ClinicID, &c.PatientID, &c.LegalGuardianID, &profID, &c.TemplateID, &c.SignerRelation, &c.SignerIsPatient, &c.Status, &signedAt, &pdfURL, &pdfSHA, &audit, &c.TemplateVersion, &verTok, &startDate, &endDate, &valor, &periodicidade, &signPlace, &signDate, &numAppointments)
+	tpl, err := ContractTemplateByID(ctx, db, c.TemplateID)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return c, nil, nil, nil, err
 	}
-	scanContractRow(&c, profID, signedAt, pdfURL, pdfSHA, verTok, audit, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments)
-	tpl, err := ContractTemplateByID(ctx, pool, c.TemplateID)
+	patient, err := PatientByID(ctx, db, c.PatientID)
 	if err != nil {
-		return &c, nil, nil, nil, err
+		return c, tpl, nil, nil, err
 	}
-	patient, err := PatientByID(ctx, pool, c.PatientID)
+	guardian, err := LegalGuardianByID(ctx, db, c.LegalGuardianID)
 	if err != nil {
-		return &c, tpl, nil, nil, err
+		return c, tpl, patient, nil, err
 	}
-	guardian, err := LegalGuardianByID(ctx, pool, c.LegalGuardianID)
-	if err != nil {
-		return &c, tpl, patient, nil, err
-	}
-	return &c, tpl, patient, guardian, nil
+	return c, tpl, patient, guardian, nil
 }
 
-func CreateContract(ctx context.Context, pool *pgxpool.Pool, clinicID, patientID, legalGuardianID uuid.UUID, professionalID *uuid.UUID, templateID uuid.UUID, signerRelation string, signerIsPatient bool, templateVersion int, startDate, endDate *time.Time, valor, periodicidade *string, signPlace *string, signDate *time.Time, numAppointments *int) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := pool.QueryRow(ctx, `
+func CreateContract(ctx context.Context, db *gorm.DB, clinicID, patientID, legalGuardianID uuid.UUID, professionalID *uuid.UUID, templateID uuid.UUID, signerRelation string, signerIsPatient bool, templateVersion int, startDate, endDate *time.Time, valor, periodicidade *string, signPlace *string, signDate *time.Time, numAppointments *int) (uuid.UUID, error) {
+	var res struct{ ID uuid.UUID }
+	err := db.WithContext(ctx).Raw(`
 		INSERT INTO contracts (clinic_id, patient_id, legal_guardian_id, professional_id, template_id, signer_relation, signer_is_patient, template_version, start_date, end_date, valor, periodicidade, sign_place, sign_date, num_appointments)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id
-	`, clinicID, patientID, legalGuardianID, professionalID, templateID, signerRelation, signerIsPatient, templateVersion, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments).Scan(&id)
-	return id, err
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+	`, clinicID, patientID, legalGuardianID, professionalID, templateID, signerRelation, signerIsPatient, templateVersion, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments).Scan(&res).Error
+	return res.ID, err
 }
 
-func CreateContractAccessToken(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID, exp time.Duration) (token string, err error) {
+func CreateContractAccessToken(ctx context.Context, db *gorm.DB, contractID uuid.UUID, exp time.Duration) (token string, err error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	token = hex.EncodeToString(b)
-	_, err = pool.Exec(ctx, `INSERT INTO contract_access_tokens (contract_id, token, expires_at) VALUES ($1, $2, $3)`, contractID, token, time.Now().Add(exp))
-	return token, err
+	return token, db.WithContext(ctx).Exec(`INSERT INTO contract_access_tokens (contract_id, token, expires_at) VALUES (?, ?, ?)`, contractID, token, time.Now().Add(exp)).Error
 }
 
-func MarkContractAccessTokenUsed(ctx context.Context, pool *pgxpool.Pool, token string) error {
-	_, err := pool.Exec(ctx, `UPDATE contract_access_tokens SET used_at = now() WHERE token = $1`, token)
-	return err
+func MarkContractAccessTokenUsed(ctx context.Context, db *gorm.DB, token string) error {
+	return db.WithContext(ctx).Exec(`UPDATE contract_access_tokens SET used_at = now() WHERE token = ?`, token).Error
 }
 
-func SignContract(ctx context.Context, pool *pgxpool.Pool, contractID uuid.UUID, pdfSHA256, verificationToken string, auditJSON []byte) error {
-	_, err := pool.Exec(ctx, `
-		UPDATE contracts SET status = 'SIGNED', signed_at = now(), pdf_sha256 = $1, verification_token = $2, audit_json = $3, updated_at = now()
-		WHERE id = $4 AND deleted_at IS NULL
-	`, pdfSHA256, verificationToken, auditJSON, contractID)
-	return err
+func SignContract(ctx context.Context, db *gorm.DB, contractID uuid.UUID, pdfSHA256, verificationToken string, auditJSON []byte) error {
+	return db.WithContext(ctx).Exec(`
+		UPDATE contracts SET status = 'SIGNED', signed_at = now(), pdf_sha256 = ?, verification_token = ?, audit_json = ?, updated_at = now()
+		WHERE id = ? AND deleted_at IS NULL
+	`, pdfSHA256, verificationToken, auditJSON, contractID).Error
 }
 
-func ContractByVerificationToken(ctx context.Context, pool *pgxpool.Pool, verificationToken string) (*Contract, error) {
+func ContractByVerificationToken(ctx context.Context, db *gorm.DB, verificationToken string) (*Contract, error) {
 	var c Contract
-	var profID *uuid.UUID
-	var signedAt *time.Time
-	var pdfURL, pdfSHA, verTok *string
-	var audit []byte
-	var startDate, endDate *time.Time
-	var valor, periodicidade, signPlace *string
-	var signDate *time.Time
-	var numAppointments *int
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, patient_id, legal_guardian_id, professional_id, template_id, signer_relation, signer_is_patient, status, signed_at, pdf_url, pdf_sha256, audit_json, template_version, verification_token, start_date, end_date, valor, periodicidade, sign_place, sign_date, num_appointments
-		FROM contracts WHERE verification_token = $1 AND deleted_at IS NULL
-	`, verificationToken).Scan(&c.ID, &c.ClinicID, &c.PatientID, &c.LegalGuardianID, &profID, &c.TemplateID, &c.SignerRelation, &c.SignerIsPatient, &c.Status, &signedAt, &pdfURL, &pdfSHA, &audit, &c.TemplateVersion, &verTok, &startDate, &endDate, &valor, &periodicidade, &signPlace, &signDate, &numAppointments)
+		FROM contracts WHERE verification_token = ? AND deleted_at IS NULL
+	`, verificationToken).Scan(&c).Error
 	if err != nil {
 		return nil, err
 	}
-	scanContractRow(&c, profID, signedAt, pdfURL, pdfSHA, verTok, audit, startDate, endDate, valor, periodicidade, signPlace, signDate, numAppointments)
+	if c.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &c, nil
 }
 
@@ -239,30 +168,17 @@ type ContractForAgenda struct {
 }
 
 // SignedContractsByClinicWithDetails retorna contratos SIGNED da clínica com nome do paciente e do modelo.
-func SignedContractsByClinicWithDetails(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) ([]ContractForAgenda, error) {
-	rows, err := pool.Query(ctx, `
+func SignedContractsByClinicWithDetails(ctx context.Context, db *gorm.DB, clinicID uuid.UUID) ([]ContractForAgenda, error) {
+	var list []ContractForAgenda
+	err := db.WithContext(ctx).Raw(`
 		SELECT c.id, c.patient_id, p.full_name AS patient_name, t.name AS template_name, c.professional_id
 		FROM contracts c
 		JOIN patients p ON p.id = c.patient_id
 		JOIN contract_templates t ON t.id = c.template_id
-		WHERE c.clinic_id = $1 AND c.status = 'SIGNED' AND c.deleted_at IS NULL AND p.deleted_at IS NULL
+		WHERE c.clinic_id = ? AND c.status = 'SIGNED' AND c.deleted_at IS NULL AND p.deleted_at IS NULL
 		ORDER BY c.signed_at DESC
-	`, clinicID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var list []ContractForAgenda
-	for rows.Next() {
-		var item ContractForAgenda
-		var profID *uuid.UUID
-		if err := rows.Scan(&item.ID, &item.PatientID, &item.PatientName, &item.TemplateName, &profID); err != nil {
-			return nil, err
-		}
-		item.ProfessionalID = profID
-		list = append(list, item)
-	}
-	return list, rows.Err()
+	`, clinicID).Scan(&list).Error
+	return list, err
 }
 
 // PatientContractItem representa um contrato do paciente com dados para exibição na lista.
@@ -288,46 +204,34 @@ type PendingContractItem struct {
 }
 
 // PendingContractsByClinic retorna os contratos PENDING da clínica (para a home: "contratos que faltam assinar").
-func PendingContractsByClinic(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID) ([]PendingContractItem, error) {
-	rows, err := pool.Query(ctx, `
+func PendingContractsByClinic(ctx context.Context, db *gorm.DB, clinicID uuid.UUID) ([]PendingContractItem, error) {
+	var list []PendingContractItem
+	err := db.WithContext(ctx).Raw(`
 		SELECT c.id, c.patient_id, p.full_name AS patient_name, t.name AS template_name, g.full_name AS guardian_name
 		FROM contracts c
 		JOIN contract_templates t ON t.id = c.template_id
 		JOIN legal_guardians g ON g.id = c.legal_guardian_id
 		JOIN patients p ON p.id = c.patient_id
-		WHERE c.clinic_id = $1 AND c.status = 'PENDING' AND c.deleted_at IS NULL AND p.deleted_at IS NULL AND g.deleted_at IS NULL
+		WHERE c.clinic_id = ? AND c.status = 'PENDING' AND c.deleted_at IS NULL AND p.deleted_at IS NULL AND g.deleted_at IS NULL
 		ORDER BY c.created_at DESC
-	`, clinicID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var list []PendingContractItem
-	for rows.Next() {
-		var item PendingContractItem
-		if err := rows.Scan(&item.ID, &item.PatientID, &item.PatientName, &item.TemplateName, &item.GuardianName); err != nil {
-			return nil, err
-		}
-		list = append(list, item)
-	}
-	return list, rows.Err()
+	`, clinicID).Scan(&list).Error
+	return list, err
 }
 
 // ContractsByPatientAndClinic retorna os contratos do paciente na clínica, com nome do modelo e do responsável.
-func ContractsByPatientAndClinic(ctx context.Context, pool *pgxpool.Pool, patientID, clinicID uuid.UUID) ([]PatientContractItem, error) {
-	list, _, err := ContractsByPatientAndClinicPaginated(ctx, pool, patientID, clinicID, 0, 0)
+func ContractsByPatientAndClinic(ctx context.Context, db *gorm.DB, patientID, clinicID uuid.UUID) ([]PatientContractItem, error) {
+	list, _, err := ContractsByPatientAndClinicPaginated(ctx, db, patientID, clinicID, 0, 0)
 	return list, err
 }
 
 // ContractsByPatientAndClinicPaginated retorna os contratos do paciente com limit/offset.
-func ContractsByPatientAndClinicPaginated(ctx context.Context, pool *pgxpool.Pool, patientID, clinicID uuid.UUID, limit, offset int) ([]PatientContractItem, int, error) {
+func ContractsByPatientAndClinicPaginated(ctx context.Context, db *gorm.DB, patientID, clinicID uuid.UUID, limit, offset int) ([]PatientContractItem, int, error) {
 	var total int
-	err := pool.QueryRow(ctx, `
+	if err := db.WithContext(ctx).Raw(`
 		SELECT COUNT(*) FROM contracts c
 		JOIN legal_guardians g ON g.id = c.legal_guardian_id
-		WHERE c.patient_id = $1 AND c.clinic_id = $2 AND c.deleted_at IS NULL AND g.deleted_at IS NULL
-	`, patientID, clinicID).Scan(&total)
-	if err != nil {
+		WHERE c.patient_id = ? AND c.clinic_id = ? AND c.deleted_at IS NULL AND g.deleted_at IS NULL
+	`, patientID, clinicID).Scan(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	q := `
@@ -336,81 +240,64 @@ func ContractsByPatientAndClinicPaginated(ctx context.Context, pool *pgxpool.Poo
 		FROM contracts c
 		JOIN contract_templates t ON t.id = c.template_id
 		JOIN legal_guardians g ON g.id = c.legal_guardian_id
-		WHERE c.patient_id = $1 AND c.clinic_id = $2 AND c.deleted_at IS NULL AND g.deleted_at IS NULL
+		WHERE c.patient_id = ? AND c.clinic_id = ? AND c.deleted_at IS NULL AND g.deleted_at IS NULL
 		ORDER BY c.created_at DESC
 	`
 	args := []interface{}{patientID, clinicID}
 	if limit > 0 {
-		q += ` LIMIT $3 OFFSET $4`
+		q += ` LIMIT ? OFFSET ?`
 		args = append(args, limit, offset)
 	}
-	rows, err := pool.Query(ctx, q, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
 	var list []PatientContractItem
-	for rows.Next() {
-		var item PatientContractItem
-		var signedAt *time.Time
-		var verTok, pdfURL *string
-		if err := rows.Scan(&item.ID, &item.LegalGuardianID, &item.Status, &signedAt, &verTok, &pdfURL, &item.TemplateName, &item.GuardianName, &item.GuardianEmail); err != nil {
-			return nil, 0, err
-		}
-		item.SignedAt = signedAt
-		item.VerificationToken = verTok
-		item.PDFURL = pdfURL
-		list = append(list, item)
-	}
-	return list, total, rows.Err()
+	err := db.WithContext(ctx).Raw(q, args...).Scan(&list).Error
+	return list, total, err
 }
 
 // CancelOtherPendingContractsForPatientAndGuardian marca como CANCELLED os demais contratos PENDING do mesmo paciente e responsável (exceto o id indicado).
-func CancelOtherPendingContractsForPatientAndGuardian(ctx context.Context, pool *pgxpool.Pool, contractID, patientID, legalGuardianID uuid.UUID) error {
-	_, err := pool.Exec(ctx, `
+func CancelOtherPendingContractsForPatientAndGuardian(ctx context.Context, db *gorm.DB, contractID, patientID, legalGuardianID uuid.UUID) error {
+	return db.WithContext(ctx).Exec(`
 		UPDATE contracts SET status = 'CANCELLED', updated_at = now()
-		WHERE patient_id = $1 AND legal_guardian_id = $2 AND status = 'PENDING' AND id != $3
-	`, patientID, legalGuardianID, contractID)
-	return err
+		WHERE patient_id = ? AND legal_guardian_id = ? AND status = 'PENDING' AND id != ?
+	`, patientID, legalGuardianID, contractID).Error
 }
 
 // CancelContract marca o contrato como CANCELLED (inativo). Permite cancelar contratos PENDING ou SIGNED.
-func CancelContract(ctx context.Context, pool *pgxpool.Pool, contractID, clinicID uuid.UUID) error {
-	result, err := pool.Exec(ctx, `
-		UPDATE contracts SET status = 'CANCELLED', updated_at = now() WHERE id = $1 AND clinic_id = $2 AND status IN ('PENDING', 'SIGNED') AND deleted_at IS NULL
+func CancelContract(ctx context.Context, db *gorm.DB, contractID, clinicID uuid.UUID) error {
+	result := db.WithContext(ctx).Exec(`
+		UPDATE contracts SET status = 'CANCELLED', updated_at = now() WHERE id = ? AND clinic_id = ? AND status IN ('PENDING', 'SIGNED') AND deleted_at IS NULL
 	`, contractID, clinicID)
-	if err != nil {
-		return err
+	if result.Error != nil {
+		return result.Error
 	}
-	if result.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
 // SetContractEndDate define a data de término do contrato e marca como ENDED (encerramento: serviço prestado até essa data).
-func SetContractEndDate(ctx context.Context, pool *pgxpool.Pool, contractID, clinicID uuid.UUID, endDate time.Time) error {
-	result, err := pool.Exec(ctx, `
-		UPDATE contracts SET end_date = $1, status = 'ENDED', updated_at = now() WHERE id = $2 AND clinic_id = $3 AND status = 'SIGNED' AND deleted_at IS NULL
+func SetContractEndDate(ctx context.Context, db *gorm.DB, contractID, clinicID uuid.UUID, endDate time.Time) error {
+	result := db.WithContext(ctx).Exec(`
+		UPDATE contracts SET end_date = ?, status = 'ENDED', updated_at = now() WHERE id = ? AND clinic_id = ? AND status = 'SIGNED' AND deleted_at IS NULL
 	`, endDate, contractID, clinicID)
-	if err != nil {
-		return err
+	if result.Error != nil {
+		return result.Error
 	}
-	if result.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func SoftDeleteContract(ctx context.Context, pool *pgxpool.Pool, contractID, clinicID uuid.UUID) error {
-	result, err := pool.Exec(ctx, `
-		UPDATE contracts SET deleted_at = now(), updated_at = now() WHERE id = $1 AND clinic_id = $2 AND deleted_at IS NULL
+func SoftDeleteContract(ctx context.Context, db *gorm.DB, contractID, clinicID uuid.UUID) error {
+	result := db.WithContext(ctx).Exec(`
+		UPDATE contracts SET deleted_at = now(), updated_at = now() WHERE id = ? AND clinic_id = ? AND deleted_at IS NULL
 	`, contractID, clinicID)
-	if err != nil {
-		return err
+	if result.Error != nil {
+		return result.Error
 	}
-	if result.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }

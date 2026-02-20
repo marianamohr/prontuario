@@ -36,7 +36,7 @@ func (h *Handler) canAccessPatientAsProfessional(r *http.Request, patientID uuid
 	if role != auth.RoleProfessional {
 		return false
 	}
-	_, err := repo.PatientByIDAndClinic(r.Context(), h.Pool, patientID, *cid)
+	_, err := repo.PatientByIDAndClinic(r.Context(), h.DB, patientID, *cid)
 	return err == nil
 }
 
@@ -49,7 +49,7 @@ func (h *Handler) canViewMedicalRecordAsGuardian(r *http.Request, patientID uuid
 	if errG != nil {
 		return false
 	}
-	can, err := repo.GuardianCanViewMedicalRecord(r.Context(), h.Pool, gID, patientID)
+	can, err := repo.GuardianCanViewMedicalRecord(r.Context(), h.DB, gID, patientID)
 	return err == nil && can
 }
 
@@ -64,7 +64,7 @@ func (h *Handler) canAccessMedicalRecord(r *http.Request, patientID uuid.UUID) b
 }
 
 func (h *Handler) logAccess(r *http.Request, clinicID *uuid.UUID, actorType string, actorID uuid.UUID, action, resourceType string, resourceID, patientID *uuid.UUID) {
-	_ = repo.CreateAccessLog(r.Context(), h.Pool, clinicID, &actorID, actorType, action, resourceType, resourceID, patientID, r.RemoteAddr, r.UserAgent(), r.Header.Get("X-Request-ID"))
+	_ = repo.CreateAccessLog(r.Context(), h.DB, clinicID, &actorID, actorType, action, resourceType, resourceID, patientID, r.RemoteAddr, r.UserAgent(), r.Header.Get("X-Request-ID"))
 }
 
 func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
@@ -78,13 +78,13 @@ func (h *Handler) ListRecordEntries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	mrID, err := repo.GetOrCreateMedicalRecord(r.Context(), h.Pool, patientID)
+	mrID, err := repo.GetOrCreateMedicalRecord(r.Context(), h.DB, patientID)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	limit, offset := ParseLimitOffset(r)
-	entries, total, err := repo.RecordEntriesByMedicalRecordPaginated(r.Context(), h.Pool, mrID, limit, offset)
+	entries, total, err := repo.RecordEntriesByMedicalRecordPaginated(r.Context(), h.DB, mrID, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -174,14 +174,14 @@ func (h *Handler) CreateRecordEntry(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"encryption"}`, http.StatusInternalServerError)
 		return
 	}
-	mrID, err := repo.GetOrCreateMedicalRecord(r.Context(), h.Pool, patientID)
+	mrID, err := repo.GetOrCreateMedicalRecord(r.Context(), h.DB, patientID)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	authorID, errAuth := uuid.Parse(auth.UserIDFrom(r.Context()))
 	_ = errAuth
-	id, err := repo.CreateRecordEntry(r.Context(), h.Pool, mrID, enc, nonce, keyVer, entryDate, authorID, role)
+	id, err := repo.CreateRecordEntry(r.Context(), h.DB, mrID, enc, nonce, keyVer, entryDate, authorID, role)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return

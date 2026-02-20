@@ -4,8 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type Professional struct {
@@ -37,31 +36,33 @@ type ProfessionalAdminView struct {
 	MaritalStatus      *string
 }
 
-func ProfessionalByEmail(ctx context.Context, pool *pgxpool.Pool, email string) (*Professional, error) {
+func ProfessionalByEmail(ctx context.Context, db *gorm.DB, email string) (*Professional, error) {
 	var p Professional
-	var sig *string
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, email, password_hash, full_name, trade_name, status, signature_image_data
-		FROM professionals WHERE lower(email) = lower($1) AND status != 'CANCELLED'
-	`, email).Scan(&p.ID, &p.ClinicID, &p.Email, &p.PasswordHash, &p.FullName, &p.TradeName, &p.Status, &sig)
+		FROM professionals WHERE lower(email) = lower(?) AND status != 'CANCELLED'
+	`, email).Scan(&p).Error
 	if err != nil {
 		return nil, err
 	}
-	p.SignatureImageData = sig
+	if p.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &p, nil
 }
 
-func ProfessionalByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Professional, error) {
+func ProfessionalByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*Professional, error) {
 	var p Professional
-	var sig *string
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, email, password_hash, full_name, trade_name, status, signature_image_data
-		FROM professionals WHERE id = $1
-	`, id).Scan(&p.ID, &p.ClinicID, &p.Email, &p.PasswordHash, &p.FullName, &p.TradeName, &p.Status, &sig)
+		FROM professionals WHERE id = ?
+	`, id).Scan(&p).Error
 	if err != nil {
 		return nil, err
 	}
-	p.SignatureImageData = sig
+	if p.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &p, nil
 }
 
@@ -76,76 +77,65 @@ type ProfessionalProfile struct {
 	MaritalStatus *string
 }
 
-func ProfessionalProfileByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*ProfessionalProfile, error) {
+func ProfessionalProfileByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*ProfessionalProfile, error) {
 	var p ProfessionalProfile
-	var tradeName, birthDate, maritalStatus *string
-	var addrID *uuid.UUID
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, email, full_name, trade_name, birth_date::text, address_id, marital_status
-		FROM professionals WHERE id = $1
-	`, id).Scan(&p.ID, &p.ClinicID, &p.Email, &p.FullName, &tradeName, &birthDate, &addrID, &maritalStatus)
+		FROM professionals WHERE id = ?
+	`, id).Scan(&p).Error
 	if err != nil {
 		return nil, err
 	}
-	p.TradeName = tradeName
-	p.BirthDate = birthDate
-	p.AddressID = addrID
-	p.MaritalStatus = maritalStatus
+	if p.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &p, nil
 }
 
-func UpdateProfessionalProfile(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, fullName string, tradeName *string, birthDate *string, addressID *uuid.UUID, maritalStatus *string) error {
-	result, err := pool.Exec(ctx, `
+func UpdateProfessionalProfile(ctx context.Context, db *gorm.DB, id uuid.UUID, fullName string, tradeName *string, birthDate *string, addressID *uuid.UUID, maritalStatus *string) error {
+	result := db.WithContext(ctx).Exec(`
 		UPDATE professionals
-		SET full_name = $1,
-		    trade_name = CASE WHEN $2::text IS NULL THEN NULL ELSE NULLIF($2::text, '') END,
-		    birth_date = CASE WHEN $3::text IS NULL THEN birth_date ELSE NULLIF($3::text, '')::date END,
-		    address_id = $4,
-		    marital_status = CASE WHEN $5::text IS NULL THEN marital_status ELSE NULLIF($5::text, '') END,
+		SET full_name = ?,
+		    trade_name = CASE WHEN ?::text IS NULL THEN NULL ELSE NULLIF(?::text, '') END,
+		    birth_date = CASE WHEN ?::text IS NULL THEN birth_date ELSE NULLIF(?::text, '')::date END,
+		    address_id = ?,
+		    marital_status = CASE WHEN ?::text IS NULL THEN marital_status ELSE NULLIF(?::text, '') END,
 		    updated_at = now()
-		WHERE id = $6
-	`, fullName, tradeName, birthDate, addressID, maritalStatus, id)
-	if err != nil {
-		return err
+		WHERE id = ?
+	`, fullName, tradeName, tradeName, birthDate, birthDate, addressID, maritalStatus, maritalStatus, id)
+	if result.Error != nil {
+		return result.Error
 	}
-	if result.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func ProfessionalAdminByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*ProfessionalAdminView, error) {
+func ProfessionalAdminByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*ProfessionalAdminView, error) {
 	var p ProfessionalAdminView
-	var sig *string
-	var tradeName, birth, cpfHash, marital *string
-	var addrID *uuid.UUID
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, email, full_name, trade_name, status, signature_image_data,
 		       birth_date::text, cpf_hash, cpf_encrypted, cpf_nonce, cpf_key_version, address_id, marital_status
-		FROM professionals WHERE id = $1
-	`, id).Scan(&p.ID, &p.ClinicID, &p.Email, &p.FullName, &tradeName, &p.Status, &sig, &birth, &cpfHash, &p.CPFEncrypted, &p.CPFNonce, &p.CPFKeyVersion, &addrID, &marital)
+		FROM professionals WHERE id = ?
+	`, id).Scan(&p).Error
 	if err != nil {
 		return nil, err
 	}
-	p.SignatureImageData = sig
-	p.TradeName = tradeName
-	p.BirthDate = birth
-	p.CPFHash = cpfHash
-	p.AddressID = addrID
-	p.MaritalStatus = marital
+	if p.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &p, nil
 }
 
-func UpdateProfessionalSignature(ctx context.Context, pool *pgxpool.Pool, professionalID uuid.UUID, signatureImageData *string) error {
-	_, err := pool.Exec(ctx, `UPDATE professionals SET signature_image_data = $1, updated_at = now() WHERE id = $2`, signatureImageData, professionalID)
-	return err
+func UpdateProfessionalSignature(ctx context.Context, db *gorm.DB, professionalID uuid.UUID, signatureImageData *string) error {
+	return db.WithContext(ctx).Exec(`UPDATE professionals SET signature_image_data = ?, updated_at = now() WHERE id = ?`, signatureImageData, professionalID).Error
 }
 
 // UpdateProfessionalAdmin atualiza dados do profissional (backoffice).
-// Campos opcionais: se nil, mantém. addressID é UUID do endereço em addresses.
 func UpdateProfessionalAdmin(
 	ctx context.Context,
-	pool *pgxpool.Pool,
+	db *gorm.DB,
 	id uuid.UUID,
 	email, fullName *string,
 	tradeName *string,
@@ -161,45 +151,46 @@ func UpdateProfessionalAdmin(
 	passwordHash *string,
 	signatureImageData *string,
 ) error {
-	result, err := pool.Exec(ctx, `
+	result := db.WithContext(ctx).Exec(`
 		UPDATE professionals
 		SET
-			email = COALESCE($1, email),
-			full_name = COALESCE($2, full_name),
-			trade_name = CASE WHEN $3::text IS NULL THEN trade_name ELSE NULLIF($3::text, '') END,
-			clinic_id = COALESCE($4, clinic_id),
-			status = COALESCE($5, status),
-			birth_date = CASE WHEN $6::text IS NULL THEN birth_date ELSE NULLIF($6::text, '')::date END,
-			address_id = COALESCE($7, address_id),
-			marital_status = CASE WHEN $8::text IS NULL THEN marital_status ELSE NULLIF($8::text, '') END,
-			cpf_hash = CASE WHEN $9::text IS NULL THEN cpf_hash ELSE NULLIF($9::text, '') END,
-			cpf_encrypted = CASE WHEN $10::bytea IS NULL THEN cpf_encrypted ELSE $10 END,
-			cpf_nonce = CASE WHEN $11::bytea IS NULL THEN cpf_nonce ELSE $11 END,
-			cpf_key_version = CASE WHEN $12::text IS NULL THEN cpf_key_version ELSE $12::text END,
-			password_hash = COALESCE($13, password_hash),
-			signature_image_data = CASE WHEN $14::text IS NULL THEN signature_image_data ELSE NULLIF($14::text, '') END,
+			email = COALESCE(?, email),
+			full_name = COALESCE(?, full_name),
+			trade_name = CASE WHEN ?::text IS NULL THEN trade_name ELSE NULLIF(?::text, '') END,
+			clinic_id = COALESCE(?, clinic_id),
+			status = COALESCE(?, status),
+			birth_date = CASE WHEN ?::text IS NULL THEN birth_date ELSE NULLIF(?::text, '')::date END,
+			address_id = COALESCE(?, address_id),
+			marital_status = CASE WHEN ?::text IS NULL THEN marital_status ELSE NULLIF(?::text, '') END,
+			cpf_hash = CASE WHEN ?::text IS NULL THEN cpf_hash ELSE NULLIF(?::text, '') END,
+			cpf_encrypted = CASE WHEN ?::bytea IS NULL THEN cpf_encrypted ELSE ? END,
+			cpf_nonce = CASE WHEN ?::bytea IS NULL THEN cpf_nonce ELSE ? END,
+			cpf_key_version = CASE WHEN ?::text IS NULL THEN cpf_key_version ELSE ?::text END,
+			password_hash = COALESCE(?, password_hash),
+			signature_image_data = CASE WHEN ?::text IS NULL THEN signature_image_data ELSE NULLIF(?::text, '') END,
 			updated_at = now()
-		WHERE id = $15
-	`, email, fullName, tradeName, clinicID, status, birthDate, addressID, maritalStatus, cpfHash, cpfEncrypted, cpfNonce, cpfKeyVersion, passwordHash, signatureImageData, id)
-	if err != nil {
-		return err
+		WHERE id = ?
+	`, email, fullName, tradeName, tradeName, clinicID, status, birthDate, addressID, maritalStatus, maritalStatus, cpfHash, cpfHash, cpfEncrypted, cpfEncrypted, cpfNonce, cpfNonce, cpfKeyVersion, cpfKeyVersion, passwordHash, signatureImageData, signatureImageData, id)
+	if result.Error != nil {
+		return result.Error
 	}
-	if result.RowsAffected() == 0 {
-		return pgx.ErrNoRows
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func ProfessionalByIDAndClinic(ctx context.Context, pool *pgxpool.Pool, id, clinicID uuid.UUID) (*Professional, error) {
+func ProfessionalByIDAndClinic(ctx context.Context, db *gorm.DB, id, clinicID uuid.UUID) (*Professional, error) {
 	var p Professional
-	var sig *string
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, clinic_id, email, password_hash, full_name, status, signature_image_data
-		FROM professionals WHERE id = $1 AND clinic_id = $2
-	`, id, clinicID).Scan(&p.ID, &p.ClinicID, &p.Email, &p.PasswordHash, &p.FullName, &p.Status, &sig)
+		FROM professionals WHERE id = ? AND clinic_id = ?
+	`, id, clinicID).Scan(&p).Error
 	if err != nil {
 		return nil, err
 	}
-	p.SignatureImageData = sig
+	if p.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
 	return &p, nil
 }

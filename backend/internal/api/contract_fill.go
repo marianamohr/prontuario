@@ -146,7 +146,7 @@ func FormatScheduleRulesText(rules []repo.ContractScheduleRule) string {
 	var parts []string
 	for _, r := range rules {
 		if r.DayOfWeek >= 0 && r.DayOfWeek < 7 {
-			t := r.SlotTime.Format("15:04")
+			t := repo.TimeStringToHHMM(r.SlotTime)
 			parts = append(parts, dayNames[r.DayOfWeek]+" às "+t)
 		}
 	}

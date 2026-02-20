@@ -27,8 +27,8 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	const exp = time.Hour
-	if prof, err := repo.ProfessionalByEmail(r.Context(), h.Pool, req.Email); err == nil {
-		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "PROFESSIONAL", prof.ID, exp)
+	if prof, err := repo.ProfessionalByEmail(r.Context(), h.DB, req.Email); err == nil {
+		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.DB, "PROFESSIONAL", prof.ID, exp)
 		_ = errTok
 		if tok != "" {
 			if h.sendPasswordResetEmail != nil {
@@ -41,8 +41,8 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if admin, err := repo.SuperAdminByEmail(r.Context(), h.Pool, req.Email); err == nil {
-		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "SUPER_ADMIN", admin.ID, exp)
+	if admin, err := repo.SuperAdminByEmail(r.Context(), h.DB, req.Email); err == nil {
+		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.DB, "SUPER_ADMIN", admin.ID, exp)
 		_ = errTok
 		if tok != "" {
 			if h.sendPasswordResetEmail != nil {
@@ -55,8 +55,8 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if g, err := repo.LegalGuardianByEmail(r.Context(), h.Pool, req.Email); err == nil {
-		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.Pool, "LEGAL_GUARDIAN", g.ID, exp)
+	if g, err := repo.LegalGuardianByEmail(r.Context(), h.DB, req.Email); err == nil {
+		tok, errTok := repo.CreatePasswordResetToken(r.Context(), h.DB, "LEGAL_GUARDIAN", g.ID, exp)
 		_ = errTok
 		if tok != "" {
 			if h.sendPasswordResetEmail != nil {
@@ -84,7 +84,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"token and new_password (min 8 chars) required"}`, http.StatusBadRequest)
 		return
 	}
-	userType, userID, err := repo.ConsumePasswordResetToken(r.Context(), h.Pool, req.Token)
+	userType, userID, err := repo.ConsumePasswordResetToken(r.Context(), h.DB, req.Token)
 	if err != nil {
 		http.Error(w, `{"error":"invalid or expired token"}`, http.StatusBadRequest)
 		return
@@ -100,11 +100,11 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	switch userType {
 	case "PROFESSIONAL":
-		_, err = h.Pool.Exec(r.Context(), "UPDATE professionals SET password_hash = $1, updated_at = now() WHERE id = $2", hash, userID)
+		err = h.DB.WithContext(r.Context()).Exec("UPDATE professionals SET password_hash = ?, updated_at = now() WHERE id = ?", hash, userID).Error
 	case "SUPER_ADMIN":
-		_, err = h.Pool.Exec(r.Context(), "UPDATE super_admins SET password_hash = $1, updated_at = now() WHERE id = $2", hash, userID)
+		err = h.DB.WithContext(r.Context()).Exec("UPDATE super_admins SET password_hash = ?, updated_at = now() WHERE id = ?", hash, userID).Error
 	case "LEGAL_GUARDIAN":
-		_, err = h.Pool.Exec(r.Context(), "UPDATE legal_guardians SET password_hash = $2, updated_at = now() WHERE id = $1", userID, hash)
+		err = h.DB.WithContext(r.Context()).Exec("UPDATE legal_guardians SET password_hash = ?, updated_at = now() WHERE id = ?", userID, hash).Error
 	default:
 		http.Error(w, `{"error":"invalid token"}`, http.StatusBadRequest)
 		return

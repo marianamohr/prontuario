@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type PatientInvite struct {
@@ -29,16 +29,16 @@ func generateInviteToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func CreatePatientInvite(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.UUID, guardianEmail, guardianFullName string, expiresAt time.Time) (*PatientInvite, error) {
+func CreatePatientInvite(ctx context.Context, db *gorm.DB, clinicID uuid.UUID, guardianEmail, guardianFullName string, expiresAt time.Time) (*PatientInvite, error) {
 	token, err := generateInviteToken()
 	if err != nil {
 		return nil, err
 	}
 	id := uuid.New()
-	_, err = pool.Exec(ctx, `
+	err = db.WithContext(ctx).Exec(`
 		INSERT INTO patient_invites (id, token, clinic_id, guardian_email, guardian_full_name, status, expires_at)
-		VALUES ($1, $2, $3, $4, $5, 'PENDING', $6)
-	`, id, token, clinicID, guardianEmail, guardianFullName, expiresAt)
+		VALUES (?, ?, ?, ?, ?, 'PENDING', ?)
+	`, id, token, clinicID, guardianEmail, guardianFullName, expiresAt).Error
 	if err != nil {
 		return nil, err
 	}
@@ -49,24 +49,26 @@ func CreatePatientInvite(ctx context.Context, pool *pgxpool.Pool, clinicID uuid.
 	}, nil
 }
 
-func GetPatientInviteByToken(ctx context.Context, pool *pgxpool.Pool, token string) (*PatientInvite, error) {
+func GetPatientInviteByToken(ctx context.Context, db *gorm.DB, token string) (*PatientInvite, error) {
 	var inv PatientInvite
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, token, clinic_id, guardian_email, guardian_full_name, status, expires_at, created_at
-		FROM patient_invites WHERE token = $1
-	`, token).Scan(&inv.ID, &inv.Token, &inv.ClinicID, &inv.GuardianEmail, &inv.GuardianFullName, &inv.Status, &inv.ExpiresAt, &inv.CreatedAt)
+		FROM patient_invites WHERE token = ?
+	`, token).Scan(&inv).Error
 	if err != nil {
 		return nil, err
+	}
+	if inv.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &inv, nil
 }
 
 // AcceptPatientInvite marks invite as ACCEPTED.
 // The actual creation/update of patient/guardian is performed by the handler in a transaction.
-func AcceptPatientInvite(ctx context.Context, pool *pgxpool.Pool, inviteID uuid.UUID) error {
-	_, err := pool.Exec(ctx, `
+func AcceptPatientInvite(ctx context.Context, db *gorm.DB, inviteID uuid.UUID) error {
+	return db.WithContext(ctx).Exec(`
 		UPDATE patient_invites SET status = 'ACCEPTED', updated_at = now()
-		WHERE id = $1
-	`, inviteID)
-	return err
+		WHERE id = ?
+	`, inviteID).Error
 }

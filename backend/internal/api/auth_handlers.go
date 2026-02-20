@@ -8,9 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/backend/internal/auth"
+	"gorm.io/gorm"
 	"github.com/prontuario/backend/internal/cache"
 	"github.com/prontuario/backend/internal/config"
 	"github.com/prontuario/backend/internal/repo"
@@ -36,7 +35,7 @@ type UserInfo struct {
 }
 
 type Handler struct {
-	Pool                       *pgxpool.Pool
+	DB                         *gorm.DB
 	Cfg                        *config.Config
 	Cache                      *cache.TTL
 	hashPassword               func(string) (string, error)
@@ -87,7 +86,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1) SUPER_ADMIN
-	admin, err := repo.SuperAdminByEmail(r.Context(), h.Pool, req.Email)
+	admin, err := repo.SuperAdminByEmail(r.Context(), h.DB, req.Email)
 	if err == nil {
 		if !auth.CheckPassword(admin.PasswordHash, req.Password) {
 			genericLoginError(w)
@@ -111,14 +110,14 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// Mantém resposta genérica por segurança.
 		genericLoginError(w)
 		return
 	}
 
 	// 2) PROFESSIONAL
-	prof, err := repo.ProfessionalByEmail(r.Context(), h.Pool, req.Email)
+	prof, err := repo.ProfessionalByEmail(r.Context(), h.DB, req.Email)
 	if err != nil {
 		genericLoginError(w)
 		return
@@ -157,7 +156,7 @@ func (h *Handler) LoginProfessional(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"email and password required"}`, http.StatusBadRequest)
 		return
 	}
-	prof, err := repo.ProfessionalByEmail(r.Context(), h.Pool, req.Email)
+	prof, err := repo.ProfessionalByEmail(r.Context(), h.DB, req.Email)
 	if err != nil {
 		genericLoginError(w)
 		return
@@ -196,7 +195,7 @@ func (h *Handler) LoginSuperAdmin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"email and password required"}`, http.StatusBadRequest)
 		return
 	}
-	admin, err := repo.SuperAdminByEmail(r.Context(), h.Pool, req.Email)
+	admin, err := repo.SuperAdminByEmail(r.Context(), h.DB, req.Email)
 	if err != nil {
 		genericLoginError(w)
 		return
@@ -266,7 +265,7 @@ func (h *Handler) GetMySignature(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid user"}`, http.StatusBadRequest)
 		return
 	}
-	prof, err := repo.ProfessionalByID(r.Context(), h.Pool, profID)
+	prof, err := repo.ProfessionalByID(r.Context(), h.DB, profID)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -311,7 +310,7 @@ func (h *Handler) PutMySignature(w http.ResponseWriter, r *http.Request) {
 		}
 		sig = &req.SignatureImageData
 	}
-	if err := repo.UpdateProfessionalSignature(r.Context(), h.Pool, profID, sig); err != nil {
+	if err := repo.UpdateProfessionalSignature(r.Context(), h.DB, profID, sig); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -342,7 +341,7 @@ func (h *Handler) GetMyBranding(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	b, err := repo.GetClinicBranding(r.Context(), h.Pool, clinicID)
+	b, err := repo.GetClinicBranding(r.Context(), h.DB, clinicID)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -424,7 +423,7 @@ func (h *Handler) PutMyBranding(w http.ResponseWriter, r *http.Request) {
 		ActionButtonColor:   req.ActionButtonColor,
 		NegationButtonColor: req.NegationButtonColor,
 	}
-	if err := repo.UpdateClinicBranding(r.Context(), h.Pool, clinicID, b); err != nil {
+	if err := repo.UpdateClinicBranding(r.Context(), h.DB, clinicID, b); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -458,9 +457,9 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid user"}`, http.StatusBadRequest)
 		return
 	}
-	p, err := repo.ProfessionalProfileByID(r.Context(), h.Pool, profID)
+	p, err := repo.ProfessionalProfileByID(r.Context(), h.DB, profID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
@@ -469,7 +468,7 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	var addressObj map[string]interface{}
 	if p.AddressID != nil {
-		addr, err := repo.GetAddressByID(r.Context(), h.Pool, *p.AddressID)
+		addr, err := repo.GetAddressByID(r.Context(), h.DB, *p.AddressID)
 		if err == nil {
 			addressObj = addressToMap(addr)
 		}
@@ -541,15 +540,15 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		addr := AddressInputToRepo(addrInput)
-		id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+		id, err := repo.CreateAddress(r.Context(), h.DB, addr)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
 		addressID = &id
 	}
-	if err := repo.UpdateProfessionalProfile(r.Context(), h.Pool, profID, fullName, tradeName, req.BirthDate, addressID, req.MaritalStatus); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if err := repo.UpdateProfessionalProfile(r.Context(), h.DB, profID, fullName, tradeName, req.BirthDate, addressID, req.MaritalStatus); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
@@ -561,13 +560,13 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sincroniza o nome da clinic interna.
-	p, err := repo.ProfessionalProfileByID(r.Context(), h.Pool, profID)
+	p, err := repo.ProfessionalProfileByID(r.Context(), h.DB, profID)
 	if err == nil {
 		effectiveName := fullName
 		if p.TradeName != nil && strings.TrimSpace(*p.TradeName) != "" {
 			effectiveName = strings.TrimSpace(*p.TradeName)
 		}
-		_, _ = h.Pool.Exec(r.Context(), "UPDATE clinics SET name = $1, updated_at = now() WHERE id = $2", effectiveName, p.ClinicID)
+		_ = h.DB.WithContext(r.Context()).Exec("UPDATE clinics SET name = ?, updated_at = now() WHERE id = ?", effectiveName, p.ClinicID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -131,7 +131,7 @@ func (h *Handler) IngestFrontendError(w http.ResponseWriter, r *http.Request) {
 		Stack:                  stack,
 		Metadata:               meta,
 	}
-	_ = repo.CreateErrorEvent(r.Context(), h.Pool, ev)
+	_ = repo.CreateErrorEvent(r.Context(), h.DB, ev)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "ok"})

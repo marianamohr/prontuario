@@ -17,7 +17,7 @@ func (h *Handler) GetRemarcarByToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
-	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.Pool, token)
+	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.DB, token)
 	if err != nil {
 		log.Printf("[remarcar] GetAppointmentByReminderToken: %v", err)
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
@@ -32,7 +32,7 @@ func (h *Handler) GetRemarcarByToken(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(loc)
 	tomorrow := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
 	endDate := tomorrow.AddDate(0, 0, 14)
-	slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.Pool, info.ProfessionalID, info.ClinicID, tomorrow, endDate, &info.AppointmentID)
+	slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.DB, info.ProfessionalID, info.ClinicID, tomorrow, endDate, &info.AppointmentID)
 	if err != nil {
 		log.Printf("[remarcar] ListAvailableSlotsForProfessional: %v", err)
 		slots = nil
@@ -46,7 +46,7 @@ func (h *Handler) GetRemarcarByToken(w http.ResponseWriter, r *http.Request) {
 		"appointment_id":     info.AppointmentID.String(),
 		"patient_name":      info.PatientName,
 		"current_date":      info.AppointmentDate.Format("2006-01-02"),
-		"current_start_time": info.StartTime.Format("15:04"),
+		"current_start_time": repo.TimeStringToHHMM(info.StartTime),
 		"status":            info.Status,
 		"slots":             slotsOut,
 	})
@@ -60,7 +60,7 @@ func (h *Handler) ConfirmRemarcar(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
-	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.Pool, token)
+	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.DB, token)
 	if err != nil || info == nil {
 		http.Error(w, `{"error":"link invalid or expired"}`, http.StatusNotFound)
 		return
@@ -74,12 +74,12 @@ func (h *Handler) ConfirmRemarcar(w http.ResponseWriter, r *http.Request) {
 	case "AGENDADO":
 		// Update to CONFIRMADO
 		statusConfirmed := "CONFIRMADO"
-		if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, nil, nil, nil, &statusConfirmed, nil); err != nil {
+		if err := repo.UpdateAppointment(r.Context(), h.DB, info.AppointmentID, info.ClinicID, nil, nil, nil, &statusConfirmed, nil); err != nil {
 			log.Printf("[confirm-remarcar] UpdateAppointment: %v", err)
 			http.Error(w, `{"error":"failed to confirm"}`, http.StatusInternalServerError)
 			return
 		}
-		_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+		_ = repo.CreateAuditEventFull(r.Context(), h.DB, repo.AuditEvent{
 			Action:       "APPOINTMENT_ATTENDANCE_CONFIRMED",
 			ActorType:    "LEGAL_GUARDIAN",
 			ActorID:      &info.GuardianID,
@@ -105,7 +105,7 @@ func (h *Handler) RemarcarAppointment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
-	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.Pool, token)
+	info, err := repo.GetAppointmentByReminderToken(r.Context(), h.DB, token)
 	if err != nil || info == nil {
 		http.Error(w, `{"error":"link invalid or expired"}`, http.StatusNotFound)
 		return
@@ -134,12 +134,12 @@ func (h *Handler) RemarcarAppointment(w http.ResponseWriter, r *http.Request) {
 	}
 	endTime := startTime.Add(50 * time.Minute)
 	statusAgendado := "AGENDADO"
-	if err := repo.UpdateAppointment(r.Context(), h.Pool, info.AppointmentID, info.ClinicID, &appointmentDate, &startTime, &endTime, &statusAgendado, nil); err != nil {
+	if err := repo.UpdateAppointment(r.Context(), h.DB, info.AppointmentID, info.ClinicID, &appointmentDate, &startTime, &endTime, &statusAgendado, nil); err != nil {
 		log.Printf("[remarcar] UpdateAppointment: %v", err)
 		http.Error(w, `{"error":"failed to update"}`, http.StatusInternalServerError)
 		return
 	}
-	_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+	_ = repo.CreateAuditEventFull(r.Context(), h.DB, repo.AuditEvent{
 		Action:       "APPOINTMENT_REMARCARED",
 		ActorType:    "LEGAL_GUARDIAN",
 		ActorID:      &info.GuardianID,

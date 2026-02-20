@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type ErrorEvent struct {
@@ -28,7 +28,7 @@ type ErrorEvent struct {
 	Metadata               interface{}
 }
 
-func CreateErrorEvent(ctx context.Context, pool *pgxpool.Pool, ev ErrorEvent) error {
+func CreateErrorEvent(ctx context.Context, db *gorm.DB, ev ErrorEvent) error {
 	var meta []byte
 	if ev.Metadata != nil {
 		var err error
@@ -37,21 +37,15 @@ func CreateErrorEvent(ctx context.Context, pool *pgxpool.Pool, ev ErrorEvent) er
 			return err
 		}
 	}
-	_, err := pool.Exec(ctx, `
+	return db.WithContext(ctx).Exec(`
 		INSERT INTO error_events (
 			request_id, source, severity,
 			clinic_id, actor_type, actor_id, is_impersonated, impersonation_session_id,
 			http_method, path, action_name,
 			kind, message, stack, pg_code, pg_message, metadata
-		) VALUES (
-			$1, $2, $3,
-			$4, $5, $6, $7, $8,
-			$9, $10, $11,
-			$12, $13, $14, $15, $16, $17
-		)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, ev.RequestID, ev.Source, ev.Severity,
 		ev.ClinicID, ev.ActorType, ev.ActorID, ev.IsImpersonated, ev.ImpersonationSessionID,
 		ev.HTTPMethod, ev.Path, ev.ActionName,
-		ev.Kind, ev.Message, ev.Stack, ev.PGCode, ev.PGMessage, meta)
-	return err
+		ev.Kind, ev.Message, ev.Stack, ev.PGCode, ev.PGMessage, meta).Error
 }

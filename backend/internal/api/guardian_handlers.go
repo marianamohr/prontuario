@@ -83,7 +83,7 @@ func (h *Handler) GuardianRegister(w http.ResponseWriter, r *http.Request) {
 		AuthProvider:  authProviderLocal,
 		Status:        "ACTIVE",
 	}
-	err = repo.CreateLegalGuardian(r.Context(), h.Pool, g)
+	err = repo.CreateLegalGuardian(r.Context(), h.DB, g)
 	if err != nil {
 		if isUniqueViolation(err) {
 			genericLoginError(w)
@@ -120,7 +120,7 @@ func (h *Handler) GuardianLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"email and password required"}`, http.StatusBadRequest)
 		return
 	}
-	g, err := repo.LegalGuardianByEmail(r.Context(), h.Pool, req.Email)
+	g, err := repo.LegalGuardianByEmail(r.Context(), h.DB, req.Email)
 	if err != nil {
 		genericLoginError(w)
 		return

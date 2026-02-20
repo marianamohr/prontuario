@@ -11,9 +11,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/prontuario/backend/internal/auth"
+	"gorm.io/gorm"
 	"github.com/prontuario/backend/internal/crypto"
 	"github.com/prontuario/backend/internal/repo"
 )
@@ -35,26 +35,21 @@ func (h *Handler) ListClinics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	rows, err := h.Pool.Query(r.Context(), "SELECT id, name FROM clinics ORDER BY name")
-	if err != nil {
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
 	type clinicRow struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
-	var list []clinicRow
-	for rows.Next() {
-		var c clinicRow
-		var id uuid.UUID
-		if err := rows.Scan(&id, &c.Name); err != nil {
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-			return
-		}
-		c.ID = id.String()
-		list = append(list, c)
+	var rows []struct {
+		ID   uuid.UUID
+		Name string
+	}
+	if err := h.DB.WithContext(r.Context()).Raw("SELECT id, name FROM clinics ORDER BY name").Scan(&rows).Error; err != nil {
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	list := make([]clinicRow, len(rows))
+	for i := range rows {
+		list[i] = clinicRow{ID: rows[i].ID.String(), Name: rows[i].Name}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"clinics": list})
@@ -79,37 +74,37 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 	var total int
 	if clinicID == "" {
 		var c1, c2 int
-		if err := h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM professionals").Scan(&c1); err != nil {
+		if err := h.DB.WithContext(r.Context()).Raw("SELECT COUNT(*) FROM professionals").Scan(&c1).Error; err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
-		if err := h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM legal_guardians WHERE deleted_at IS NULL").Scan(&c2); err != nil {
+		if err := h.DB.WithContext(r.Context()).Raw("SELECT COUNT(*) FROM legal_guardians WHERE deleted_at IS NULL").Scan(&c2).Error; err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
 		total = c1 + c2
-		q := `
-			SELECT type, id, email, full_name, clinic_id, status FROM (
+		var unionRows []struct {
+			Type     string
+			ID       string
+			Email    string
+			FullName string
+			ClinicID *string
+			Status   string
+		}
+		if err := h.DB.WithContext(r.Context()).Raw(`
+			SELECT type, id::text, email, full_name, clinic_id, status FROM (
 				SELECT 'PROFESSIONAL' as type, id, email, full_name, clinic_id::text, status FROM professionals
 				UNION ALL
 				SELECT 'LEGAL_GUARDIAN', id, email, full_name, NULL::text, status FROM legal_guardians WHERE deleted_at IS NULL
-			) u ORDER BY type, email LIMIT $1 OFFSET $2
-		`
-		rows, err := h.Pool.Query(r.Context(), q, limit, offset)
-		if err != nil {
+			) u ORDER BY type, email LIMIT ? OFFSET ?
+		`, limit, offset).Scan(&unionRows).Error; err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var u userRow
-			var cid *string
-			if err := rows.Scan(&u.Type, &u.ID, &u.Email, &u.FullName, &cid, &u.Status); err != nil {
-				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-				return
-			}
-			if cid != nil {
-				u.ClinicID = *cid
+		for _, row := range unionRows {
+			u := userRow{Type: row.Type, ID: row.ID, Email: row.Email, FullName: row.FullName, Status: row.Status}
+			if row.ClinicID != nil {
+				u.ClinicID = *row.ClinicID
 			}
 			list = append(list, u)
 		}
@@ -119,25 +114,22 @@ func (h *Handler) ListUsersBackoffice(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"invalid clinic_id"}`, http.StatusBadRequest)
 			return
 		}
-		if err := h.Pool.QueryRow(r.Context(), "SELECT COUNT(*) FROM professionals WHERE clinic_id = $1", cid).Scan(&total); err != nil {
+		if err := h.DB.WithContext(r.Context()).Raw("SELECT COUNT(*) FROM professionals WHERE clinic_id = ?", cid).Scan(&total).Error; err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
-		rows, err := h.Pool.Query(r.Context(), "SELECT id, email, full_name, status FROM professionals WHERE clinic_id = $1 ORDER BY email LIMIT $2 OFFSET $3", cid, limit, offset)
-		if err != nil {
+		var proRows []struct {
+			ID       string
+			Email    string
+			FullName string
+			Status   string
+		}
+		if err := h.DB.WithContext(r.Context()).Raw("SELECT id::text, email, full_name, status FROM professionals WHERE clinic_id = ? ORDER BY email LIMIT ? OFFSET ?", cid, limit, offset).Scan(&proRows).Error; err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var u userRow
-			u.Type = "PROFESSIONAL"
-			u.ClinicID = clinicID
-			if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &u.Status); err != nil {
-				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-				return
-			}
-			list = append(list, u)
+		for _, row := range proRows {
+			list = append(list, userRow{Type: "PROFESSIONAL", ID: row.ID, Email: row.Email, FullName: row.FullName, ClinicID: clinicID, Status: row.Status})
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -204,9 +196,9 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 	var resp BackofficeUserDetailResponse
 	switch userType {
 	case "PROFESSIONAL":
-		p, err := repo.ProfessionalAdminByID(r.Context(), h.Pool, id)
+		p, err := repo.ProfessionalAdminByID(r.Context(), h.DB, id)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 				return
 			}
@@ -228,7 +220,7 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		cid := p.ClinicID.String()
 		var addrResp *BackofficeAddressResponse
 		if p.AddressID != nil {
-			if addr, err := repo.GetAddressByID(r.Context(), h.Pool, *p.AddressID); err == nil {
+			if addr, err := repo.GetAddressByID(r.Context(), h.DB, *p.AddressID); err == nil {
 				addrResp = repoAddressToBackoffice(addr)
 			}
 		}
@@ -246,9 +238,9 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			MaritalStatus: p.MaritalStatus,
 		}
 	case "LEGAL_GUARDIAN":
-		g, err := repo.LegalGuardianByID(r.Context(), h.Pool, id)
+		g, err := repo.LegalGuardianByID(r.Context(), h.DB, id)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 				return
 			}
@@ -270,7 +262,7 @@ func (h *Handler) GetBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		hasGoogle := g.GoogleSub != nil && strings.TrimSpace(*g.GoogleSub) != ""
 		var addrResp *BackofficeAddressResponse
 		if g.AddressID != nil {
-			if addr, err := repo.GetAddressByID(r.Context(), h.Pool, *g.AddressID); err == nil {
+			if addr, err := repo.GetAddressByID(r.Context(), h.DB, *g.AddressID); err == nil {
 				addrResp = repoAddressToBackoffice(addr)
 			}
 		}
@@ -431,7 +423,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			addr := AddressInputToRepo(addrInput)
-			id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+			id, err := repo.CreateAddress(r.Context(), h.DB, addr)
 			if err != nil {
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 				return
@@ -440,7 +432,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := repo.UpdateProfessionalAdmin(
 			r.Context(),
-			h.Pool,
+			h.DB,
 			id,
 			req.Email,
 			req.FullName,
@@ -461,7 +453,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, `{"error":"e-mail já está em uso"}`, http.StatusConflict)
 				return
 			}
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 				return
 			}
@@ -478,9 +470,9 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case "LEGAL_GUARDIAN":
-		_, err := repo.LegalGuardianByID(r.Context(), h.Pool, id)
+		_, err := repo.LegalGuardianByID(r.Context(), h.DB, id)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 				return
 			}
@@ -539,7 +531,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			addr := AddressInputToRepo(addrInput)
-			aid, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+			aid, err := repo.CreateAddress(r.Context(), h.DB, addr)
 			if err != nil {
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 				return
@@ -548,7 +540,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := repo.UpdateLegalGuardianAdmin(
 			r.Context(),
-			h.Pool,
+			h.DB,
 			id,
 			req.FullName,
 			req.Email,
@@ -567,7 +559,7 @@ func (h *Handler) PatchBackofficeUser(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, `{"error":"e-mail ou cpf já está em uso"}`, http.StatusConflict)
 				return
 			}
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 				return
 			}
@@ -598,7 +590,7 @@ func (h *Handler) CleanupOrphanAddresses(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	deleted, err := repo.CleanupOrphanAddresses(r.Context(), h.Pool)
+	deleted, err := repo.CleanupOrphanAddresses(r.Context(), h.DB)
 	if err != nil {
 		log.Printf("[backoffice] cleanup orphan addresses: %v", err)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -675,11 +667,11 @@ func (h *Handler) ImpersonateStart(w http.ResponseWriter, r *http.Request) {
 	var clinicID *uuid.UUID
 	if req.TargetUserType == "PROFESSIONAL" {
 		var cid uuid.UUID
-		if err := h.Pool.QueryRow(r.Context(), "SELECT clinic_id FROM professionals WHERE id = $1", targetID).Scan(&cid); err == nil {
+		if err := h.DB.WithContext(r.Context()).Raw("SELECT clinic_id FROM professionals WHERE id = ?", targetID).Scan(&cid).Error; err == nil {
 			clinicID = &cid
 		}
 	}
-	sessionID, err := repo.StartImpersonation(r.Context(), h.Pool, adminUUID, req.TargetUserType, targetID, clinicID, req.Reason)
+	sessionID, err := repo.StartImpersonation(r.Context(), h.DB, adminUUID, req.TargetUserType, targetID, clinicID, req.Reason)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -691,7 +683,7 @@ func (h *Handler) ImpersonateStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	_ = repo.CreateAuditEvent(r.Context(), h.Pool, "IMPERSONATION_START", "SUPER_ADMIN", &adminUUID, map[string]string{
+	_ = repo.CreateAuditEvent(r.Context(), h.DB, "IMPERSONATION_START", "SUPER_ADMIN", &adminUUID, map[string]string{
 		"target_user_type": req.TargetUserType, "target_user_id": req.TargetUserID, "reason": req.Reason, "session_id": sessionID.String()})
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(ImpersonateStartResponse{Token: tok, SessionID: sessionID.String(), ExpiresIn: int(exp.Seconds())})
@@ -710,13 +702,13 @@ func (h *Handler) ImpersonateEnd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid session"}`, http.StatusBadRequest)
 		return
 	}
-	if err := repo.EndImpersonation(r.Context(), h.Pool, sessionID); err != nil {
+	if err := repo.EndImpersonation(r.Context(), h.DB, sessionID); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	// Auditoria: fim de impersonate (ação do super admin, embora o token atual esteja como impersonated).
 	// Sem PII; registra apenas IDs e request_id.
-	_ = repo.CreateAuditEvent(r.Context(), h.Pool, "IMPERSONATION_END", "SUPER_ADMIN", nil, map[string]string{
+	_ = repo.CreateAuditEvent(r.Context(), h.DB, "IMPERSONATION_END", "SUPER_ADMIN", nil, map[string]string{
 		"session_id": sessionID.String(),
 		"request_id": r.Header.Get("X-Request-ID"),
 	})

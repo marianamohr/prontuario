@@ -2,43 +2,48 @@ package repo
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prontuario/backend/internal/seed"
+	"github.com/prontuario/backend/internal/testutil"
 )
 
 // TestTenantIsolation exige DATABASE_URL. Rode: go test -v -run TestTenantIsolation ./internal/repo
 func TestTenantIsolation(t *testing.T) {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
-		t.Skip("DATABASE_URL not set")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatalf("pool: %v", err)
-	}
-	defer pool.Close()
 	ctx := context.Background()
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
+		t.Skip("DATABASE_URL not set")
+		return
+	}
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	if err := testutil.MustMigrate(ctx, db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := seed.Run(ctx, db); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
 
 	var clinicA, clinicB uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT id FROM clinics LIMIT 1").Scan(&clinicA); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT id FROM clinics LIMIT 1").Scan(&clinicA).Error; err != nil {
 		t.Fatalf("need clinics (run seed): %v", err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT id FROM clinics OFFSET 1 LIMIT 1").Scan(&clinicB); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT id FROM clinics OFFSET 1 LIMIT 1").Scan(&clinicB).Error; err != nil {
 		t.Fatal("need at least 2 clinics from seed")
 	}
 	if clinicA == clinicB {
 		t.Fatal("need at least 2 distinct clinics from seed")
 	}
 
-	// Cria paciente na clínica A
-	patientA, err := CreatePatient(ctx, pool, clinicA, "Paciente Isolamento Test", nil, nil, nil)
+	patientA, err := CreatePatient(ctx, db, clinicA, "Paciente Isolamento Test", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("CreatePatient: %v", err)
 	}
-	listB, err := PatientsByClinic(ctx, pool, clinicB)
+	listB, err := PatientsByClinic(ctx, db, clinicB)
 	if err != nil {
 		t.Fatalf("PatientsByClinic B: %v", err)
 	}
@@ -47,7 +52,7 @@ func TestTenantIsolation(t *testing.T) {
 			t.Errorf("patient from clinic A must not appear when listing clinic B (tenant isolation)")
 		}
 	}
-	listA, err := PatientsByClinic(ctx, pool, clinicA)
+	listA, err := PatientsByClinic(ctx, db, clinicA)
 	if err != nil {
 		t.Fatalf("PatientsByClinic A: %v", err)
 	}

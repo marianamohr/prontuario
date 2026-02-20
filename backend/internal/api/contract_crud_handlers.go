@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/prontuario/backend/internal/auth"
+	"gorm.io/gorm"
 	"github.com/prontuario/backend/internal/repo"
 )
 
@@ -37,9 +37,9 @@ func (h *Handler) ListContractTemplates(w http.ResponseWriter, r *http.Request) 
 		if p, e := uuid.Parse(userID); e == nil {
 			profID = &p
 		}
-		list, err = repo.ContractTemplatesByClinicAndProfessional(r.Context(), h.Pool, cid, profID)
+		list, err = repo.ContractTemplatesByClinicAndProfessional(r.Context(), h.DB, cid, profID)
 	} else {
-		list, err = repo.ContractTemplatesByClinic(r.Context(), h.Pool, cid)
+		list, err = repo.ContractTemplatesByClinic(r.Context(), h.DB, cid)
 	}
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -90,7 +90,7 @@ func (h *Handler) CreateContractTemplate(w http.ResponseWriter, r *http.Request)
 			profID = &p
 		}
 	}
-	id, err := repo.CreateContractTemplate(r.Context(), h.Pool, cid, profID, req.Name, req.BodyHTML, req.TipoServico, req.Periodicidade)
+	id, err := repo.CreateContractTemplate(r.Context(), h.DB, cid, profID, req.Name, req.BodyHTML, req.TipoServico, req.Periodicidade)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -100,7 +100,7 @@ func (h *Handler) CreateContractTemplate(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handler) GetContractTemplate(w http.ResponseWriter, r *http.Request) {
-	if h.Pool == nil {
+	if h.DB == nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -120,9 +120,9 @@ func (h *Handler) GetContractTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, id, cid)
+	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.DB, id, cid)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
@@ -176,7 +176,7 @@ func (h *Handler) UpdateContractTemplate(w http.ResponseWriter, r *http.Request)
 	if req.Version <= 0 {
 		req.Version = 1
 	}
-	if err := repo.UpdateContractTemplate(r.Context(), h.Pool, id, cid, req.Name, req.BodyHTML, req.TipoServico, req.Periodicidade, req.Version); err != nil {
+	if err := repo.UpdateContractTemplate(r.Context(), h.DB, id, cid, req.Name, req.BodyHTML, req.TipoServico, req.Periodicidade, req.Version); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -201,7 +201,7 @@ func (h *Handler) DeleteContractTemplate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	if err := repo.DeleteContractTemplate(r.Context(), h.Pool, id, cid); err != nil {
+	if err := repo.DeleteContractTemplate(r.Context(), h.DB, id, cid); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			http.Error(w, `{"error":"Não é possível excluir: existem contratos vinculados a este modelo."}`, http.StatusConflict)
@@ -230,7 +230,7 @@ func (h *Handler) ListContracts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := ParseLimitOffset(r)
-	list, total, err := repo.ContractsByClinicPaginated(r.Context(), h.Pool, cid, limit, offset)
+	list, total, err := repo.ContractsByClinicPaginated(r.Context(), h.DB, cid, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -280,7 +280,7 @@ func (h *Handler) ListPendingContracts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	list, err := repo.PendingContractsByClinic(r.Context(), h.Pool, cid)
+	list, err := repo.PendingContractsByClinic(r.Context(), h.DB, cid)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -319,7 +319,7 @@ func (h *Handler) ListContractsForAgenda(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	list, err := repo.SignedContractsByClinicWithDetails(r.Context(), h.Pool, cid)
+	list, err := repo.SignedContractsByClinicWithDetails(r.Context(), h.DB, cid)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -390,12 +390,12 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid template_id"}`, http.StatusBadRequest)
 		return
 	}
-	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, templateID, cid)
+	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.DB, templateID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"template not found"}`, http.StatusBadRequest)
 		return
 	}
-	_, err = repo.PatientByIDAndClinic(r.Context(), h.Pool, patientID, cid)
+	_, err = repo.PatientByIDAndClinic(r.Context(), h.DB, patientID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"patient not found"}`, http.StatusBadRequest)
 		return
@@ -426,12 +426,12 @@ func (h *Handler) CreateContract(w http.ResponseWriter, r *http.Request) {
 	if req.Periodicidade != "" {
 		periodicidadePtr = &req.Periodicidade
 	}
-	contractID, err := repo.CreateContract(r.Context(), h.Pool, cid, patientID, guardianID, profID, templateID, req.SignerRelation, req.SignerIsPatient, tpl.Version, startDate, endDate, valorPtr, periodicidadePtr, nil, nil, nil)
+	contractID, err := repo.CreateContract(r.Context(), h.DB, cid, patientID, guardianID, profID, templateID, req.SignerRelation, req.SignerIsPatient, tpl.Version, startDate, endDate, valorPtr, periodicidadePtr, nil, nil, nil)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	accessToken, err := repo.CreateContractAccessToken(r.Context(), h.Pool, contractID, 7*24*time.Hour)
+	accessToken, err := repo.CreateContractAccessToken(r.Context(), h.DB, contractID, 7*24*time.Hour)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -454,7 +454,7 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"token required"}`, http.StatusNotFound)
 		return
 	}
-	c, err := repo.ContractByVerificationToken(r.Context(), h.Pool, token)
+	c, err := repo.ContractByVerificationToken(r.Context(), h.DB, token)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -468,20 +468,20 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 		signedAt = c.SignedAt.Format(time.RFC3339)
 	}
 	bodyHTML := ""
-	tpl, err := repo.ContractTemplateByID(r.Context(), h.Pool, c.TemplateID)
+	tpl, err := repo.ContractTemplateByID(r.Context(), h.DB, c.TemplateID)
 	if err == nil {
-		patient, errP := repo.PatientByID(r.Context(), h.Pool, c.PatientID)
+		patient, errP := repo.PatientByID(r.Context(), h.DB, c.PatientID)
 		_ = errP
-		guardian, errG := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
+		guardian, errG := repo.LegalGuardianByID(r.Context(), h.DB, c.LegalGuardianID)
 		_ = errG
 		contratado := ""
-		if clinic, errClinic := repo.ClinicByID(r.Context(), h.Pool, c.ClinicID); errClinic == nil && clinic != nil {
+		if clinic, errClinic := repo.ClinicByID(r.Context(), h.DB, c.ClinicID); errClinic == nil && clinic != nil {
 			contratado = clinic.Name
 		}
 		var sigData *string
 		var profName *string
 		if c.ProfessionalID != nil {
-			if prof, errProf := repo.ProfessionalByID(r.Context(), h.Pool, *c.ProfessionalID); errProf == nil && prof != nil {
+			if prof, errProf := repo.ProfessionalByID(r.Context(), h.DB, *c.ProfessionalID); errProf == nil && prof != nil {
 				sigData = prof.SignatureImageData
 				profName = &prof.FullName
 			}
@@ -506,7 +506,7 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 		if periodicidadeVal == "" {
 			periodicidadeVal = strPtrVal(tpl.Periodicidade)
 		}
-		rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+		rules, errRules := repo.ListContractScheduleRules(r.Context(), h.DB, c.ID)
 		_ = errRules
 		consultasPrevistas := FormatScheduleRulesText(rules)
 		localVal := strPtrVal(c.SignPlace)
@@ -514,7 +514,7 @@ func (h *Handler) GetContractVerify(w http.ResponseWriter, r *http.Request) {
 		if c.SignedAt != nil {
 			dataAssinatura = c.SignedAt.Format("02/01/2006 15:04:05")
 		}
-		guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+		guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.DB, guardian)
 		bodyHTML = FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeVal, strPtrVal(c.Valor), sigData, profName, dataInicio, dataFim, guardianSigHTML, consultasPrevistas, localVal, dataAssinatura, guardianAddrStr)
 	}
 	w.Header().Set("Content-Type", "application/json")

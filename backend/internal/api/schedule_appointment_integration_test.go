@@ -19,6 +19,7 @@ import (
 	"github.com/prontuario/backend/internal/repo"
 	"github.com/prontuario/backend/internal/seed"
 	"github.com/prontuario/backend/internal/testutil"
+	"gorm.io/gorm"
 )
 
 // newScheduleAppointmentRouter monta um router com rotas de agenda, appointments e contratos usadas nos testes.
@@ -36,18 +37,21 @@ func newScheduleAppointmentRouter(h *Handler, jwtSecret []byte) http.Handler {
 
 func TestIntegration_GetAvailableSlots_WithoutAuth_Returns401(t *testing.T) {
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/me/available-slots?from=2025-02-01&to=2025-02-28", nil)
@@ -60,21 +64,24 @@ func TestIntegration_GetAvailableSlots_WithoutAuth_Returns401(t *testing.T) {
 
 func TestIntegration_GetAvailableSlots_WithoutFromTo_Returns400(t *testing.T) {
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
 	cfg.JWTSecret = jwtSecret
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
-	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
+	clinicID, profID := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
 	if profID == uuid.Nil {
 		t.Fatal("seed did not create professional")
 	}
@@ -91,21 +98,24 @@ func TestIntegration_GetAvailableSlots_WithoutFromTo_Returns400(t *testing.T) {
 
 func TestIntegration_GetAvailableSlots_WithAuth_Returns200AndSlots(t *testing.T) {
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
 	cfg.JWTSecret = jwtSecret
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
-	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
+	clinicID, profID := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
 	if profID == uuid.Nil {
 		t.Fatal("seed did not create professional")
 	}
@@ -134,26 +144,29 @@ func TestIntegration_GetAvailableSlots_WithAuth_Returns200AndSlots(t *testing.T)
 
 func TestIntegration_PatchAppointment_AcceptsNewStatuses(t *testing.T) {
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
 	cfg.JWTSecret = jwtSecret
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
-	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
+	clinicID, profID := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
 	if profID == uuid.Nil {
 		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT id FROM patients WHERE clinic_id = ? LIMIT 1", clinicID).Scan(&patientID).Error; err != nil {
 		t.Fatalf("patient: %v", err)
 	}
 
@@ -161,7 +174,7 @@ func TestIntegration_PatchAppointment_AcceptsNewStatuses(t *testing.T) {
 	startTime := time.Date(0, 1, 1, 9, 0, 0, 0, time.UTC)
 	endTime := startTime.Add(50 * time.Minute)
 	appointmentDate := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
-	apptID, err := repo.CreateAppointment(ctx, pool, clinicID, profID, patientID, nil, appointmentDate, startTime, endTime, "AGENDADO", "")
+	apptID, err := repo.CreateAppointment(ctx, db, clinicID, profID, patientID, nil, appointmentDate, startTime, endTime, "AGENDADO", "")
 	if err != nil {
 		t.Fatalf("CreateAppointment: %v", err)
 	}
@@ -179,7 +192,7 @@ func TestIntegration_PatchAppointment_AcceptsNewStatuses(t *testing.T) {
 	}
 	// Conferir no banco
 	var status string
-	if err := pool.QueryRow(ctx, "SELECT status FROM appointments WHERE id = $1", apptID).Scan(&status); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT status FROM appointments WHERE id = ?", apptID).Scan(&status).Error; err != nil {
 		t.Fatalf("query status: %v", err)
 	}
 	if status != "CONFIRMADO" {
@@ -190,34 +203,37 @@ func TestIntegration_PatchAppointment_AcceptsNewStatuses(t *testing.T) {
 func TestIntegration_SendContract_WithScheduleRules_NoConfig_Returns400(t *testing.T) {
 	// With no schedule config, available slots are empty; sending with schedule_rules should return 400
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
 	cfg.JWTSecret = jwtSecret
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
-	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
+	clinicID, profID := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
 	if profID == uuid.Nil {
 		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT id FROM patients WHERE clinic_id = ? LIMIT 1", clinicID).Scan(&patientID).Error; err != nil {
 		t.Fatalf("patient: %v", err)
 	}
 	var guardianID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT legal_guardian_id FROM patient_guardians WHERE patient_id = $1 LIMIT 1", patientID).Scan(&guardianID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT legal_guardian_id FROM patient_guardians WHERE patient_id = ? LIMIT 1", patientID).Scan(&guardianID).Error; err != nil {
 		t.Fatalf("guardian: %v", err)
 	}
 	var templateID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT id FROM contract_templates WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&templateID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT id FROM contract_templates WHERE clinic_id = ? LIMIT 1", clinicID).Scan(&templateID).Error; err != nil {
 		t.Skip("clinic has no template; create template in seed to test send-contract")
 		return
 	}
@@ -249,25 +265,28 @@ func TestIntegration_SendContract_WithScheduleRules_NoConfig_Returns400(t *testi
 
 func TestIntegration_ConfirmRemarcar_OnlyAgendadoBecomesConfirmado(t *testing.T) {
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
-	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
+	clinicID, profID := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
 	if profID == uuid.Nil {
 		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT id FROM patients WHERE clinic_id = ? LIMIT 1", clinicID).Scan(&patientID).Error; err != nil {
 		t.Fatalf("patient: %v", err)
 	}
 	var guardianID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT legal_guardian_id FROM patient_guardians WHERE patient_id = $1 LIMIT 1", patientID).Scan(&guardianID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT legal_guardian_id FROM patient_guardians WHERE patient_id = ? LIMIT 1", patientID).Scan(&guardianID).Error; err != nil {
 		t.Fatalf("guardian: %v", err)
 	}
 
@@ -275,22 +294,22 @@ func TestIntegration_ConfirmRemarcar_OnlyAgendadoBecomesConfirmado(t *testing.T)
 	startTime := time.Date(0, 1, 1, 10, 0, 0, 0, time.UTC)
 	endTime := startTime.Add(50 * time.Minute)
 	appointmentDate := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
-	apptID, err := repo.CreateAppointment(ctx, pool, clinicID, profID, patientID, nil, appointmentDate, startTime, endTime, "AGENDADO", "")
+	apptID, err := repo.CreateAppointment(ctx, db, clinicID, profID, patientID, nil, appointmentDate, startTime, endTime, "AGENDADO", "")
 	if err != nil {
 		t.Fatalf("CreateAppointment: %v", err)
 	}
 	token := uuid.New().String()
-	_, err = pool.Exec(ctx, `
+	err = db.WithContext(ctx).Exec(`
 		INSERT INTO appointment_reminder_tokens (appointment_id, guardian_id, token, expires_at)
-		VALUES ($1, $2, $3, now() + interval '1 day')
-	`, apptID, guardianID, token)
+		VALUES (?, ?, ?, now() + interval '1 day')
+	`, apptID, guardianID, token).Error
 	if err != nil {
 		t.Fatalf("insert token: %v", err)
 	}
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newScheduleAppointmentRouter(h, jwtSecret)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/appointments/remarcar/"+token+"/confirm", nil)
@@ -300,7 +319,7 @@ func TestIntegration_ConfirmRemarcar_OnlyAgendadoBecomesConfirmado(t *testing.T)
 		t.Errorf("expected 200 on confirm (AGENDADO -> CONFIRMADO), got %d body=%s", rr.Code, rr.Body.String())
 	}
 	var status string
-	if err := pool.QueryRow(ctx, "SELECT status FROM appointments WHERE id = $1", apptID).Scan(&status); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT status FROM appointments WHERE id = ?", apptID).Scan(&status).Error; err != nil {
 		t.Fatalf("query status: %v", err)
 	}
 	if status != "CONFIRMADO" {
@@ -310,46 +329,49 @@ func TestIntegration_ConfirmRemarcar_OnlyAgendadoBecomesConfirmado(t *testing.T)
 
 func TestIntegration_ConfirmRemarcar_PreAgendado_Returns400(t *testing.T) {
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
-	clinicID, profID := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
+	clinicID, profID := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
 	if profID == uuid.Nil {
 		t.Fatal("seed did not create professional")
 	}
 	var patientID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT id FROM patients WHERE clinic_id = $1 LIMIT 1", clinicID).Scan(&patientID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT id FROM patients WHERE clinic_id = ? LIMIT 1", clinicID).Scan(&patientID).Error; err != nil {
 		t.Fatalf("patient: %v", err)
 	}
 	var guardianID uuid.UUID
-	if err := pool.QueryRow(ctx, "SELECT legal_guardian_id FROM patient_guardians WHERE patient_id = $1 LIMIT 1", patientID).Scan(&guardianID); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT legal_guardian_id FROM patient_guardians WHERE patient_id = ? LIMIT 1", patientID).Scan(&guardianID).Error; err != nil {
 		t.Fatalf("guardian: %v", err)
 	}
 
 	startTime := time.Date(0, 1, 1, 10, 0, 0, 0, time.UTC)
 	endTime := startTime.Add(50 * time.Minute)
 	appointmentDate := time.Date(2025, 3, 20, 0, 0, 0, 0, time.UTC)
-	apptID, err := repo.CreateAppointment(ctx, pool, clinicID, profID, patientID, nil, appointmentDate, startTime, endTime, "PRE_AGENDADO", "")
+	apptID, err := repo.CreateAppointment(ctx, db, clinicID, profID, patientID, nil, appointmentDate, startTime, endTime, "PRE_AGENDADO", "")
 	if err != nil {
 		t.Fatalf("CreateAppointment: %v", err)
 	}
 	token := uuid.New().String()
-	_, err = pool.Exec(ctx, `
+	err = db.WithContext(ctx).Exec(`
 		INSERT INTO appointment_reminder_tokens (appointment_id, guardian_id, token, expires_at)
-		VALUES ($1, $2, $3, now() + interval '1 day')
-	`, apptID, guardianID, token)
+		VALUES (?, ?, ?, now() + interval '1 day')
+	`, apptID, guardianID, token).Error
 	if err != nil {
 		t.Fatalf("insert token: %v", err)
 	}
 
 	cfg := config.Load()
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newScheduleAppointmentRouter(h, []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx"))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/appointments/remarcar/"+token+"/confirm", nil)
@@ -359,7 +381,7 @@ func TestIntegration_ConfirmRemarcar_PreAgendado_Returns400(t *testing.T) {
 		t.Errorf("expected 400 when status is PRE_AGENDADO, got %d body=%s", rr.Code, rr.Body.String())
 	}
 	var status string
-	if err := pool.QueryRow(ctx, "SELECT status FROM appointments WHERE id = $1", apptID).Scan(&status); err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT status FROM appointments WHERE id = ?", apptID).Scan(&status).Error; err != nil {
 		t.Fatalf("query status: %v", err)
 	}
 	if status != "PRE_AGENDADO" {

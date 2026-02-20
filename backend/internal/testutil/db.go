@@ -6,29 +6,33 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/backend/internal/migrate"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-// OpenPool abre pool a partir de DATABASE_URL. Se não houver, retorna nil.
-func OpenPool(ctx context.Context) (*pgxpool.Pool, string) {
+// OpenDB abre conexão GORM a partir de DATABASE_URL. Se não houver, retorna nil.
+func OpenDB(ctx context.Context) (*gorm.DB, string) {
 	url := os.Getenv("DATABASE_URL")
 	if url == "" {
 		return nil, ""
 	}
-	pool, err := pgxpool.New(ctx, url)
+	db, err := gorm.Open(postgres.Open(url), &gorm.Config{})
 	if err != nil {
 		return nil, url
 	}
-	return pool, url
+	if _, err := db.DB(); err != nil {
+		return nil, url
+	}
+	return db, url
 }
 
-func MustMigrate(ctx context.Context, pool *pgxpool.Pool) error {
+func MustMigrate(ctx context.Context, db *gorm.DB) error {
 	migrationsDir, err := findMigrationsDir()
 	if err != nil {
 		return err
 	}
-	return migrate.Run(ctx, pool, migrationsDir)
+	return migrate.Run(ctx, db, migrationsDir)
 }
 
 func findMigrationsDir() (string, error) {

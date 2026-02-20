@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v5"
 	"github.com/prontuario/backend/internal/auth"
+	"gorm.io/gorm"
 	"github.com/prontuario/backend/internal/crypto"
 	"github.com/prontuario/backend/internal/repo"
 )
@@ -49,12 +49,12 @@ func (h *Handler) ListPatients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := ParseLimitOffset(r)
-	total, err := repo.PatientsCountByClinic(r.Context(), h.Pool, cid)
+	total, err := repo.PatientsCountByClinic(r.Context(), h.DB, cid)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	list, err := repo.PatientsByClinicPaginated(r.Context(), h.Pool, cid, limit, offset)
+	list, err := repo.PatientsByClinicPaginated(r.Context(), h.DB, cid, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -102,7 +102,7 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	p, err := repo.PatientByIDAndClinic(r.Context(), h.Pool, patientID, cid)
+	p, err := repo.PatientByIDAndClinic(r.Context(), h.DB, patientID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -126,10 +126,10 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	out["cpf"] = patientCPFStr
-	guardians, errGuardians := repo.GuardiansByPatient(r.Context(), h.Pool, patientID)
+	guardians, errGuardians := repo.GuardiansByPatient(r.Context(), h.DB, patientID)
 	_ = errGuardians
 	if len(guardians) > 0 {
-		g, errG := repo.LegalGuardianByID(r.Context(), h.Pool, guardians[0].ID)
+		g, errG := repo.LegalGuardianByID(r.Context(), h.DB, guardians[0].ID)
 		_ = errG
 		if g != nil {
 			// Descriptografa CPF do responsável (para PROFESSIONAL do tenant / SUPER_ADMIN).
@@ -146,7 +146,7 @@ func (h *Handler) GetPatient(w http.ResponseWriter, r *http.Request) {
 			}
 			var guardianAddr map[string]interface{}
 			if g.AddressID != nil {
-				if addr, err := repo.GetAddressByID(r.Context(), h.Pool, *g.AddressID); err == nil {
+				if addr, err := repo.GetAddressByID(r.Context(), h.DB, *g.AddressID); err == nil {
 					guardianAddr = AddressToMap(addr)
 				}
 			}
@@ -204,7 +204,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	p, err := repo.PatientByIDAndClinic(r.Context(), h.Pool, patientID, cid)
+	p, err := repo.PatientByIDAndClinic(r.Context(), h.DB, patientID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -248,7 +248,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		addr := AddressInputToRepo(addrInput)
-		id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+		id, err := repo.CreateAddress(r.Context(), h.DB, addr)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
@@ -257,7 +257,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 	} else {
 		patientAddrID = p.AddressID
 	}
-	if err := repo.UpdatePatient(r.Context(), h.Pool, p.ID, cid, fullName, birthDate, email, patientAddrID); err != nil {
+	if err := repo.UpdatePatient(r.Context(), h.DB, p.ID, cid, fullName, birthDate, email, patientAddrID); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -265,7 +265,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 	if req.PatientCPF != nil {
 		s := strings.TrimSpace(*req.PatientCPF)
 		if s == "" {
-			if err := repo.ClearPatientCPF(r.Context(), h.Pool, p.ID, cid); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			if err := repo.ClearPatientCPF(r.Context(), h.DB, p.ID, cid); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 				return
 			}
@@ -290,7 +290,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, `{"error":"encryption"}`, http.StatusInternalServerError)
 				return
 			}
-			if err := repo.SetPatientCPF(r.Context(), h.Pool, p.ID, cid, enc, nonce, keyVer, cpfHash); err != nil {
+			if err := repo.SetPatientCPF(r.Context(), h.DB, p.ID, cid, enc, nonce, keyVer, cpfHash); err != nil {
 				if isUniqueViolation(err) {
 					http.Error(w, `{"error":"CPF already registered for another patient"}`, http.StatusBadRequest)
 					return
@@ -300,10 +300,10 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	guardians, errGuardians := repo.GuardiansByPatient(r.Context(), h.Pool, patientID)
+	guardians, errGuardians := repo.GuardiansByPatient(r.Context(), h.DB, patientID)
 	_ = errGuardians
 	if len(guardians) > 0 && (req.GuardianFullName != nil || req.GuardianEmail != nil || req.GuardianAddress != nil || req.GuardianBirthDate != nil || req.GuardianPhone != nil || req.GuardianCPF != nil) {
-		g, err := repo.LegalGuardianByID(r.Context(), h.Pool, guardians[0].ID)
+		g, err := repo.LegalGuardianByID(r.Context(), h.DB, guardians[0].ID)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
@@ -336,7 +336,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			addr := AddressInputToRepo(addrInput)
-			id, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+			id, err := repo.CreateAddress(r.Context(), h.DB, addr)
 			if err != nil {
 				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 				return
@@ -364,7 +364,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 			gPhone = g.Phone
 		}
 		// Atualiza dados não sensíveis
-		if err := repo.UpdateLegalGuardian(r.Context(), h.Pool, g.ID, gFullName, gEmail, gAddrID, gBirth, gPhone, nil); err != nil {
+		if err := repo.UpdateLegalGuardian(r.Context(), h.DB, g.ID, gFullName, gEmail, gAddrID, gBirth, gPhone, nil); err != nil {
 			if isUniqueViolation(err) {
 				http.Error(w, `{"error":"email already in use"}`, http.StatusBadRequest)
 				return
@@ -394,7 +394,7 @@ func (h *Handler) UpdatePatient(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, `{"error":"encryption"}`, http.StatusInternalServerError)
 				return
 			}
-			if err := repo.UpdateLegalGuardianCPF(r.Context(), h.Pool, g.ID, enc, nonce, keyVer, cpfHash); err != nil {
+			if err := repo.UpdateLegalGuardianCPF(r.Context(), h.DB, g.ID, enc, nonce, keyVer, cpfHash); err != nil {
 				if isUniqueViolation(err) {
 					http.Error(w, `{"error":"CPF already in use"}`, http.StatusBadRequest)
 					return
@@ -499,7 +499,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		guardianAddr := AddressInputToRepo(guardianAddrInput)
-		guardianAddressID, err := repo.CreateAddress(r.Context(), h.Pool, guardianAddr)
+		guardianAddressID, err := repo.CreateAddress(r.Context(), h.DB, guardianAddr)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
@@ -523,7 +523,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			AuthProvider:  "LOCAL",
 			Status:        "ACTIVE",
 		}
-		if err := repo.CreateLegalGuardian(r.Context(), h.Pool, g); err != nil {
+		if err := repo.CreateLegalGuardian(r.Context(), h.DB, g); err != nil {
 			http.Error(w, `{"error":"email already in use or internal error"}`, http.StatusBadRequest)
 			return
 		}
@@ -532,12 +532,12 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 			addrInput, err := parseAddressFromRequest(req.PatientAddress)
 			if err == nil && ValidateAddress(addrInput) == nil {
 				addr := AddressInputToRepo(addrInput)
-				if id, err := repo.CreateAddress(r.Context(), h.Pool, addr); err == nil {
+				if id, err := repo.CreateAddress(r.Context(), h.DB, addr); err == nil {
 					patientAddrID = &id
 				}
 			}
 		}
-		patientID, err := repo.CreatePatient(r.Context(), h.Pool, cid, patientName, req.BirthDate, nil, patientAddrID)
+		patientID, err := repo.CreatePatient(r.Context(), h.DB, cid, patientName, req.BirthDate, nil, patientAddrID)
 		if err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
@@ -566,7 +566,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 					http.Error(w, `{"error":"encryption"}`, http.StatusInternalServerError)
 					return
 				}
-				if err := repo.SetPatientCPF(r.Context(), h.Pool, patientID, cid, enc, nonce, keyVer, cpfHash); err != nil {
+				if err := repo.SetPatientCPF(r.Context(), h.DB, patientID, cid, enc, nonce, keyVer, cpfHash); err != nil {
 					if isUniqueViolation(err) {
 						http.Error(w, `{"error":"CPF already registered for another patient"}`, http.StatusBadRequest)
 						return
@@ -580,7 +580,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		if !req.SamePerson && req.PatientFullName != "" {
 			relation = "Responsável"
 		}
-		if err := repo.CreatePatientGuardian(r.Context(), h.Pool, patientID, g.ID, relation, true, true); err != nil {
+		if err := repo.CreatePatientGuardian(r.Context(), h.DB, patientID, g.ID, relation, true, true); err != nil {
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
@@ -593,7 +593,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"full_name required"}`, http.StatusBadRequest)
 		return
 	}
-	id, err := repo.CreatePatient(r.Context(), h.Pool, cid, req.FullName, req.BirthDate, nil, nil)
+	id, err := repo.CreatePatient(r.Context(), h.DB, cid, req.FullName, req.BirthDate, nil, nil)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -622,7 +622,7 @@ func (h *Handler) CreatePatient(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, `{"error":"encryption"}`, http.StatusInternalServerError)
 				return
 			}
-			if err := repo.SetPatientCPF(r.Context(), h.Pool, id, cid, enc, nonce, keyVer, cpfHash); err != nil {
+			if err := repo.SetPatientCPF(r.Context(), h.DB, id, cid, enc, nonce, keyVer, cpfHash); err != nil {
 				if isUniqueViolation(err) {
 					http.Error(w, `{"error":"CPF already registered for another patient"}`, http.StatusBadRequest)
 					return
@@ -648,7 +648,7 @@ func (h *Handler) ListPatientGuardians(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	list, err := repo.GuardiansByPatient(r.Context(), h.Pool, patientID)
+	list, err := repo.GuardiansByPatient(r.Context(), h.DB, patientID)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -731,17 +731,17 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"invalid template_id"}`, http.StatusBadRequest)
 		return
 	}
-	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, templateID, cid)
+	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.DB, templateID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"template not found"}`, http.StatusBadRequest)
 		return
 	}
-	guardian, err := repo.LegalGuardianByID(r.Context(), h.Pool, guardianID)
+	guardian, err := repo.LegalGuardianByID(r.Context(), h.DB, guardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not found"}`, http.StatusBadRequest)
 		return
 	}
-	_, err = repo.PatientGuardianByPatientAndGuardian(r.Context(), h.Pool, patientID, guardianID)
+	_, err = repo.PatientGuardianByPatientAndGuardian(r.Context(), h.DB, patientID, guardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not linked to patient"}`, http.StatusBadRequest)
 		return
@@ -763,6 +763,10 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		if t, err := time.Parse("2006-01-02", req.DataFim); err == nil {
 			endDate = &t
 		}
+	}
+	if len(req.ScheduleRules) > 0 && endDate == nil {
+		end2030 := time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC)
+		endDate = &end2030
 	}
 	var valorPtr *string
 	if req.Valor != "" {
@@ -795,7 +799,10 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		if r.DayOfWeek < 0 || r.DayOfWeek > 6 || r.SlotTime == "" {
 			continue
 		}
-		t, err := time.Parse("15:04", r.SlotTime)
+		t, err := time.Parse("15:04:05", r.SlotTime)
+		if err != nil {
+			t, err = time.Parse("15:04", r.SlotTime)
+		}
 		if err != nil {
 			continue
 		}
@@ -813,11 +820,16 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		if endDate != nil && endDate.After(start) {
 			end = *endDate
 		}
+		validationEnd := start.AddDate(0, 0, 12*7)
+		endValidation := end
+		if validationEnd.Before(end) {
+			endValidation = validationEnd
+		}
 		maxApp := 0
 		if numAppointmentsPtr != nil && *numAppointmentsPtr > 0 {
 			maxApp = *numAppointmentsPtr
 		}
-		slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.Pool, *profID, cid, start, end, nil)
+		slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.DB, *profID, cid, start, endValidation, nil)
 		if err != nil {
 			log.Printf("[send-contract] ListAvailableSlotsForProfessional: %v", err)
 			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
@@ -828,7 +840,7 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 			slotSet[s.Date+"|"+s.StartTime] = true
 		}
 		created := 0
-		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		for d := start; !d.After(endValidation); d = d.AddDate(0, 0, 1) {
 			if maxApp > 0 && created >= maxApp {
 				break
 			}
@@ -848,7 +860,7 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
-	contractID, err := repo.CreateContract(r.Context(), h.Pool, cid, patientID, guardianID, profID, templateID, "Responsável", false, tpl.Version, startDate, endDate, valorPtr, periodicidadePtr, signPlacePtr, signDatePtr, numAppointmentsPtr)
+	contractID, err := repo.CreateContract(r.Context(), h.DB, cid, patientID, guardianID, profID, templateID, "Responsável", false, tpl.Version, startDate, endDate, valorPtr, periodicidadePtr, signPlacePtr, signDatePtr, numAppointmentsPtr)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -859,31 +871,27 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 			if r.DayOfWeek < 0 || r.DayOfWeek > 6 || r.SlotTime == "" {
 				continue
 			}
-			t, err := time.Parse("15:04", r.SlotTime)
+			t, err := time.Parse("15:04:05", r.SlotTime)
+			if err != nil {
+				t, err = time.Parse("15:04", r.SlotTime)
+			}
 			if err != nil {
 				continue
 			}
-			rules = append(rules, repo.ContractScheduleRule{ContractID: contractID, DayOfWeek: r.DayOfWeek, SlotTime: t})
+			rules = append(rules, repo.ContractScheduleRule{ContractID: contractID, DayOfWeek: r.DayOfWeek, SlotTime: t.Format("15:04:05")})
 		}
 		if len(rules) > 0 {
-			_ = repo.CreateContractScheduleRules(r.Context(), h.Pool, contractID, rules)
-			// Criar compromissos PRE_AGENDADO (respeitando config e ocupação já validados acima)
+			_ = repo.CreateContractScheduleRules(r.Context(), h.DB, contractID, rules)
+			// Criar compromissos PRE_AGENDADO até 31/12/2030 (slot fica ocupado na agenda)
 			start := time.Now()
 			if startDate != nil {
 				start = *startDate
 			}
-			end := start.AddDate(1, 0, 0)
-			if endDate != nil && endDate.After(start) {
-				end = *endDate
-			}
-			maxApp := 0
-			if numAppointmentsPtr != nil && *numAppointmentsPtr > 0 {
-				maxApp = *numAppointmentsPtr
-			}
-			_ = repo.CreateAppointmentsFromContractRulesWithStatus(r.Context(), h.Pool, contractID, cid, *profID, patientID, start, end, 50, maxApp, "PRE_AGENDADO")
+			end2030 := time.Date(2030, 12, 31, 0, 0, 0, 0, time.UTC)
+			_ = repo.CreateAppointmentsFromContractRulesWithStatus(r.Context(), h.DB, contractID, cid, *profID, patientID, start, end2030, 50, 0, "PRE_AGENDADO")
 		}
 	}
-	accessToken, err := repo.CreateContractAccessToken(r.Context(), h.Pool, contractID, 7*24*time.Hour)
+	accessToken, err := repo.CreateContractAccessToken(r.Context(), h.DB, contractID, 7*24*time.Hour)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -928,7 +936,7 @@ func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	c, err := repo.ContractByIDAndClinic(r.Context(), h.Pool, contractID, *cid)
+	c, err := repo.ContractByIDAndClinic(r.Context(), h.DB, contractID, *cid)
 	if err != nil {
 		http.Error(w, `{"error":"contract not found"}`, http.StatusNotFound)
 		return
@@ -937,22 +945,22 @@ func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	tpl, err := repo.ContractTemplateByID(r.Context(), h.Pool, c.TemplateID)
+	tpl, err := repo.ContractTemplateByID(r.Context(), h.DB, c.TemplateID)
 	if err != nil {
 		http.Error(w, `{"error":"template not found"}`, http.StatusNotFound)
 		return
 	}
-	patient, err := repo.PatientByID(r.Context(), h.Pool, c.PatientID)
+	patient, err := repo.PatientByID(r.Context(), h.DB, c.PatientID)
 	if err != nil {
 		http.Error(w, `{"error":"patient not found"}`, http.StatusNotFound)
 		return
 	}
-	guardian, err := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
+	guardian, err := repo.LegalGuardianByID(r.Context(), h.DB, c.LegalGuardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not found"}`, http.StatusNotFound)
 		return
 	}
-	clinic, errClinic := repo.ClinicByID(r.Context(), h.Pool, c.ClinicID)
+	clinic, errClinic := repo.ClinicByID(r.Context(), h.DB, c.ClinicID)
 	_ = errClinic
 	contratado := ""
 	if clinic != nil {
@@ -961,7 +969,7 @@ func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request)
 	var signatureData *string
 	var professionalName *string
 	if c.ProfessionalID != nil {
-		if prof, err := repo.ProfessionalByID(r.Context(), h.Pool, *c.ProfessionalID); err == nil {
+		if prof, err := repo.ProfessionalByID(r.Context(), h.DB, *c.ProfessionalID); err == nil {
 			signatureData = prof.SignatureImageData
 			professionalName = &prof.FullName
 			if contratado != "" {
@@ -988,10 +996,10 @@ func (h *Handler) GetContractPreviewByID(w http.ResponseWriter, r *http.Request)
 	if objeto == "" {
 		objeto = tpl.Name
 	}
-	rules, errRules := repo.ListContractScheduleRules(r.Context(), h.Pool, c.ID)
+	rules, errRules := repo.ListContractScheduleRules(r.Context(), h.DB, c.ID)
 	_ = errRules
 	consultasPrevistas := FormatScheduleRulesText(rules)
-	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.DB, guardian)
 	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "", guardianAddrStr)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
@@ -1041,27 +1049,27 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid template_id"}`, http.StatusBadRequest)
 		return
 	}
-	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.Pool, templateID, *cid)
+	tpl, err := repo.ContractTemplateByIDAndClinic(r.Context(), h.DB, templateID, *cid)
 	if err != nil {
 		http.Error(w, `{"error":"template not found"}`, http.StatusBadRequest)
 		return
 	}
-	guardian, err := repo.LegalGuardianByID(r.Context(), h.Pool, guardianID)
+	guardian, err := repo.LegalGuardianByID(r.Context(), h.DB, guardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not found"}`, http.StatusBadRequest)
 		return
 	}
-	_, err = repo.PatientGuardianByPatientAndGuardian(r.Context(), h.Pool, patientID, guardianID)
+	_, err = repo.PatientGuardianByPatientAndGuardian(r.Context(), h.DB, patientID, guardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not linked to patient"}`, http.StatusBadRequest)
 		return
 	}
-	patient, err := repo.PatientByID(r.Context(), h.Pool, patientID)
+	patient, err := repo.PatientByID(r.Context(), h.DB, patientID)
 	if err != nil {
 		http.Error(w, `{"error":"patient not found"}`, http.StatusBadRequest)
 		return
 	}
-	clinic, errClinic := repo.ClinicByID(r.Context(), h.Pool, *cid)
+	clinic, errClinic := repo.ClinicByID(r.Context(), h.DB, *cid)
 	_ = errClinic // best-effort for display
 	contratado := ""
 	if clinic != nil {
@@ -1072,7 +1080,7 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 	if auth.RoleFrom(r.Context()) == auth.RoleProfessional {
 		userID := auth.UserIDFrom(r.Context())
 		if profID, e := uuid.Parse(userID); e == nil {
-			if prof, err := repo.ProfessionalByIDAndClinic(r.Context(), h.Pool, profID, *cid); err == nil {
+			if prof, err := repo.ProfessionalByIDAndClinic(r.Context(), h.DB, profID, *cid); err == nil {
 				signatureData = prof.SignatureImageData
 				professionalName = &prof.FullName
 				if contratado != "" {
@@ -1092,7 +1100,7 @@ func (h *Handler) GetContractPreview(w http.ResponseWriter, r *http.Request) {
 		periodicidadeDisplay = strPtrVal(tpl.Periodicidade)
 	}
 	consultasPrevistas := ""
-	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.Pool, guardian)
+	guardianAddrStr := FormatGuardianAddressForContract(r.Context(), h.DB, guardian)
 	body := FillContractBody(tpl.BodyHTML, patient, guardian, contratado, objeto, strPtrVal(tpl.TipoServico), periodicidadeDisplay, valorStr, signatureData, professionalName, dataInicioDisplay, dataFimDisplay, "", consultasPrevistas, "", "", guardianAddrStr)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"body_html": body})
@@ -1120,7 +1128,7 @@ func (h *Handler) ListPatientContracts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := ParseLimitOffset(r)
-	list, total, err := repo.ContractsByPatientAndClinicPaginated(r.Context(), h.Pool, patientID, *cid, limit, offset)
+	list, total, err := repo.ContractsByPatientAndClinicPaginated(r.Context(), h.DB, patientID, *cid, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -1200,7 +1208,7 @@ func (h *Handler) ResendContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	c, err := repo.ContractByIDAndClinic(r.Context(), h.Pool, contractID, cid)
+	c, err := repo.ContractByIDAndClinic(r.Context(), h.DB, contractID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -1213,12 +1221,12 @@ func (h *Handler) ResendContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"contract already signed"}`, http.StatusBadRequest)
 		return
 	}
-	guardian, err := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
+	guardian, err := repo.LegalGuardianByID(r.Context(), h.DB, c.LegalGuardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not found"}`, http.StatusInternalServerError)
 		return
 	}
-	accessToken, err := repo.CreateContractAccessToken(r.Context(), h.Pool, c.ID, 7*24*time.Hour)
+	accessToken, err := repo.CreateContractAccessToken(r.Context(), h.DB, c.ID, 7*24*time.Hour)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -1271,7 +1279,7 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	c, err := repo.ContractByIDAndClinic(r.Context(), h.Pool, contractID, cid)
+	c, err := repo.ContractByIDAndClinic(r.Context(), h.DB, contractID, cid)
 	if err != nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
@@ -1284,27 +1292,33 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"contract is already cancelled"}`, http.StatusBadRequest)
 		return
 	}
-	if c.Status != "PENDING" && c.Status != "SIGNED" {
+	if c.Status == "SIGNED" {
+		http.Error(w, `{"error":"contract already signed; use end contract instead"}`, http.StatusBadRequest)
+		return
+	}
+	if c.Status != "PENDING" {
 		http.Error(w, `{"error":"contract already ended or cancelled"}`, http.StatusBadRequest)
 		return
 	}
-	guardian, err := repo.LegalGuardianByID(r.Context(), h.Pool, c.LegalGuardianID)
+	guardian, err := repo.LegalGuardianByID(r.Context(), h.DB, c.LegalGuardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not found"}`, http.StatusInternalServerError)
 		return
 	}
-	if err := repo.CancelContract(r.Context(), h.Pool, contractID, cid); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if err := repo.CancelContract(r.Context(), h.DB, contractID, cid); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
 		}
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	// Cancel appointments linked to this contract
-	cancelledIDs, errAppt := repo.CancelAppointmentsByContractIDs(r.Context(), h.Pool, contractID)
+	// Finalizar apenas appointments a partir de hoje (da data do cancelamento para frente)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	cancelledIDs, errAppt := repo.CancelAppointmentsByContractFromDateIDs(r.Context(), h.DB, contractID, today)
 	if errAppt != nil {
-		log.Printf("[cancel-contract] failed to cancel contract appointments %s: %v", contractID, errAppt)
+		log.Printf("[cancel-contract] failed to cancel contract appointments from date %s: %v", contractID, errAppt)
 	}
 	// Audit: contract cancelled + batch of appointments cancelled
 	var actorID *uuid.UUID
@@ -1321,7 +1335,7 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 	src := "USER"
 	sev := "INFO"
 	resType := "CONTRACT"
-	_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+	_ = repo.CreateAuditEventFull(r.Context(), h.DB, repo.AuditEvent{
 		Action:                 "CONTRACT_CANCELLED",
 		ActorType:              actorType,
 		ActorID:                actorID,
@@ -1344,7 +1358,7 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 			idStrs = append(idStrs, id.String())
 		}
 		sys := "SYSTEM"
-		_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+		_ = repo.CreateAuditEventFull(r.Context(), h.DB, repo.AuditEvent{
 			Action:                 "APPOINTMENTS_CANCELLED_BATCH",
 			ActorType:              "SYSTEM",
 			ActorID:                nil,
@@ -1374,9 +1388,9 @@ func (h *Handler) CancelContract(w http.ResponseWriter, r *http.Request) {
 	msg := "Contract cancelled. Guardian was notified by email."
 	if len(cancelledIDs) > 0 {
 		if len(cancelledIDs) == 1 {
-			msg = "Contract cancelled. 1 linked appointment was cancelled. Guardian was notified by email."
+			msg = "Contract cancelled. 1 linked appointment finalized from today onward. Guardian was notified by email."
 		} else {
-			msg = "Contract cancelled. " + strconv.Itoa(len(cancelledIDs)) + " linked appointments were cancelled. Guardian was notified by email."
+			msg = "Contract cancelled. " + strconv.Itoa(len(cancelledIDs)) + " linked appointments finalized from today onward. Guardian was notified by email."
 		}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"message": msg})
@@ -1395,13 +1409,13 @@ func (h *Handler) SoftDeletePatient(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid patient_id"}`, http.StatusBadRequest)
 		return
 	}
-	p, err := repo.PatientByID(r.Context(), h.Pool, patientID)
+	p, err := repo.PatientByID(r.Context(), h.DB, patientID)
 	if err != nil {
 		http.Error(w, `{"error":"patient not found"}`, http.StatusNotFound)
 		return
 	}
-	if err := repo.SoftDeletePatient(r.Context(), h.Pool, patientID, p.ClinicID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if err := repo.SoftDeletePatient(r.Context(), h.DB, patientID, p.ClinicID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"patient not found"}`, http.StatusNotFound)
 			return
 		}
@@ -1423,7 +1437,7 @@ func (h *Handler) SoftDeletePatient(w http.ResponseWriter, r *http.Request) {
 	src := "USER"
 	sev := "INFO"
 	resType := "PATIENT"
-	_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+	_ = repo.CreateAuditEventFull(r.Context(), h.DB, repo.AuditEvent{
 		Action:                 "PATIENT_SOFT_DELETED",
 		ActorType:              actorType,
 		ActorID:                actorID,
@@ -1468,13 +1482,13 @@ func (h *Handler) SoftDeleteGuardian(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Verifica se o responsável está vinculado ao paciente
-	_, err = repo.PatientGuardianByPatientAndGuardian(r.Context(), h.Pool, patientID, guardianID)
+	_, err = repo.PatientGuardianByPatientAndGuardian(r.Context(), h.DB, patientID, guardianID)
 	if err != nil {
 		http.Error(w, `{"error":"guardian not found for patient"}`, http.StatusNotFound)
 		return
 	}
-	if err := repo.SoftDeleteLegalGuardian(r.Context(), h.Pool, guardianID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if err := repo.SoftDeleteLegalGuardian(r.Context(), h.DB, guardianID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"guardian not found"}`, http.StatusNotFound)
 			return
 		}
@@ -1496,7 +1510,7 @@ func (h *Handler) SoftDeleteGuardian(w http.ResponseWriter, r *http.Request) {
 	src := "USER"
 	sev := "INFO"
 	resType := "LEGAL_GUARDIAN"
-	_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+	_ = repo.CreateAuditEventFull(r.Context(), h.DB, repo.AuditEvent{
 		Action:                 "LEGAL_GUARDIAN_SOFT_DELETED",
 		ActorType:              actorType,
 		ActorID:                actorID,
@@ -1548,13 +1562,13 @@ func (h *Handler) SoftDeleteContract(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 			return
 		}
-		c, err = repo.ContractByIDAndClinic(r.Context(), h.Pool, contractID, cid)
+		c, err = repo.ContractByIDAndClinic(r.Context(), h.DB, contractID, cid)
 		if err != nil {
 			http.Error(w, `{"error":"contract not found"}`, http.StatusNotFound)
 			return
 		}
 	} else {
-		c, err = repo.ContractByID(r.Context(), h.Pool, contractID)
+		c, err = repo.ContractByID(r.Context(), h.DB, contractID)
 		if err != nil {
 			http.Error(w, `{"error":"contract not found"}`, http.StatusNotFound)
 			return
@@ -1565,8 +1579,8 @@ func (h *Handler) SoftDeleteContract(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
-	if err := repo.SoftDeleteContract(r.Context(), h.Pool, contractID, cid); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+	if err := repo.SoftDeleteContract(r.Context(), h.DB, contractID, cid); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"contract not found"}`, http.StatusNotFound)
 			return
 		}
@@ -1588,7 +1602,7 @@ func (h *Handler) SoftDeleteContract(w http.ResponseWriter, r *http.Request) {
 	src := "USER"
 	sev := "INFO"
 	resType := "CONTRACT"
-	_ = repo.CreateAuditEventFull(r.Context(), h.Pool, repo.AuditEvent{
+	_ = repo.CreateAuditEventFull(r.Context(), h.DB, repo.AuditEvent{
 		Action:                 "CONTRACT_SOFT_DELETED",
 		ActorType:              actorType,
 		ActorID:                actorID,

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type AuditEvent struct {
@@ -26,7 +26,7 @@ type AuditEvent struct {
 	Metadata               interface{}
 }
 
-func CreateAuditEventFull(ctx context.Context, pool *pgxpool.Pool, ev AuditEvent) error {
+func CreateAuditEventFull(ctx context.Context, db *gorm.DB, ev AuditEvent) error {
 	var meta []byte
 	if ev.Metadata != nil {
 		var marshalErr error
@@ -35,22 +35,34 @@ func CreateAuditEventFull(ctx context.Context, pool *pgxpool.Pool, ev AuditEvent
 			return marshalErr
 		}
 	}
-	_, err := pool.Exec(ctx, `
+	source := ev.Source
+	if source == nil {
+		s := defaultAuditSource(ev.ActorType)
+		source = &s
+	}
+	severity := ev.Severity
+	if severity == nil {
+		s := "INFO"
+		severity = &s
+	}
+	return db.WithContext(ctx).Exec(`
 		INSERT INTO audit_events (
 			action, actor_type, actor_id, clinic_id, request_id, ip, user_agent,
 			resource_type, resource_id, patient_id, is_impersonated, impersonation_session_id,
 			source, severity, metadata
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9, $10, $11, $12,
-			$13, $14, $15
-		)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		ev.Action, ev.ActorType, ev.ActorID, ev.ClinicID, nullIfEmptyText(ev.RequestID), nullIfEmptyText(ev.IP), nullIfEmptyText(ev.UserAgent),
 		ev.ResourceType, ev.ResourceID, ev.PatientID, ev.IsImpersonated, ev.ImpersonationSessionID,
-		ev.Source, ev.Severity, meta,
-	)
-	return err
+		source, severity, meta,
+	).Error
+}
+
+func defaultAuditSource(actorType string) string {
+	if actorType == "SYSTEM" {
+		return "SYSTEM"
+	}
+	return "USER"
 }
 
 func nullIfEmptyText(s string) *string {
@@ -60,8 +72,8 @@ func nullIfEmptyText(s string) *string {
 	return &s
 }
 
-func CreateAuditEvent(ctx context.Context, pool *pgxpool.Pool, action, actorType string, actorID *uuid.UUID, metadata interface{}) error {
-	return CreateAuditEventFull(ctx, pool, AuditEvent{
+func CreateAuditEvent(ctx context.Context, db *gorm.DB, action, actorType string, actorID *uuid.UUID, metadata interface{}) error {
+	return CreateAuditEventFull(ctx, db, AuditEvent{
 		Action:    action,
 		ActorType: actorType,
 		ActorID:   actorID,
@@ -69,10 +81,9 @@ func CreateAuditEvent(ctx context.Context, pool *pgxpool.Pool, action, actorType
 	})
 }
 
-func CreateAccessLog(ctx context.Context, pool *pgxpool.Pool, clinicID, actorID *uuid.UUID, actorType, action, resourceType string, resourceID, patientID *uuid.UUID, ip, userAgent, requestID string) error {
-	_, err := pool.Exec(ctx, `
+func CreateAccessLog(ctx context.Context, db *gorm.DB, clinicID, actorID *uuid.UUID, actorType, action, resourceType string, resourceID, patientID *uuid.UUID, ip, userAgent, requestID string) error {
+	return db.WithContext(ctx).Exec(`
 		INSERT INTO access_logs (clinic_id, actor_type, actor_id, action, resource_type, resource_id, patient_id, ip, user_agent, request_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	`, clinicID, actorType, actorID, action, resourceType, resourceID, patientID, ip, userAgent, requestID)
-	return err
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, clinicID, actorType, actorID, action, resourceType, resourceID, patientID, ip, userAgent, requestID).Error
 }

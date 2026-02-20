@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type SuperAdmin struct {
@@ -15,14 +15,17 @@ type SuperAdmin struct {
 	Status       string
 }
 
-func SuperAdminByEmail(ctx context.Context, pool *pgxpool.Pool, email string) (*SuperAdmin, error) {
+func SuperAdminByEmail(ctx context.Context, db *gorm.DB, email string) (*SuperAdmin, error) {
 	var s SuperAdmin
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, email, password_hash, full_name, status
-		FROM super_admins WHERE email = $1 AND status != 'CANCELLED'
-	`, email).Scan(&s.ID, &s.Email, &s.PasswordHash, &s.FullName, &s.Status)
+		FROM super_admins WHERE email = ? AND status != 'CANCELLED'
+	`, email).Scan(&s).Error
 	if err != nil {
 		return nil, err
+	}
+	if s.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &s, nil
 }

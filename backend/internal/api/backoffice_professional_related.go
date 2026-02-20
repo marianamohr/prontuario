@@ -37,61 +37,35 @@ func (h *Handler) BackofficeProfessionalRelatedData(w http.ResponseWriter, r *ht
 	}
 
 	var clinicID uuid.UUID
-	if err := h.Pool.QueryRow(r.Context(), `SELECT clinic_id FROM professionals WHERE id = $1`, profID).Scan(&clinicID); err != nil {
+	if err := h.DB.WithContext(r.Context()).Raw(`SELECT clinic_id FROM professionals WHERE id = ?`, profID).Scan(&clinicID).Error; err != nil || clinicID == uuid.Nil {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		return
 	}
 
-	// Pacientes da clinic (sem soft deleted)
-	rows, err := h.Pool.Query(r.Context(), `
+	var patients []backofficeRelatedPatient
+	if err := h.DB.WithContext(r.Context()).Raw(`
 		SELECT id::text, full_name, birth_date::text
 		FROM patients
-		WHERE clinic_id = $1 AND deleted_at IS NULL
+		WHERE clinic_id = ? AND deleted_at IS NULL
 		ORDER BY full_name
-	`, clinicID)
-	if err != nil {
+	`, clinicID).Scan(&patients).Error; err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	var patients []backofficeRelatedPatient
-	for rows.Next() {
-		var p backofficeRelatedPatient
-		var bd *string
-		if err := rows.Scan(&p.ID, &p.FullName, &bd); err != nil {
-			rows.Close()
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-			return
-		}
-		p.BirthDate = bd
-		patients = append(patients, p)
-	}
-	rows.Close()
 
-	// Responsáveis vinculados a esses pacientes (distinct) + contagem
-	rows2, err := h.Pool.Query(r.Context(), `
-		SELECT g.id::text, g.full_name, g.email, g.status, COUNT(DISTINCT pg.patient_id)::int
+	var guardians []backofficeRelatedGuardian
+	if err := h.DB.WithContext(r.Context()).Raw(`
+		SELECT g.id::text, g.full_name, g.email, g.status, COUNT(DISTINCT pg.patient_id)::int as patients_count
 		FROM legal_guardians g
 		JOIN patient_guardians pg ON pg.legal_guardian_id = g.id
 		JOIN patients p ON p.id = pg.patient_id
-		WHERE p.clinic_id = $1 AND p.deleted_at IS NULL AND g.deleted_at IS NULL
+		WHERE p.clinic_id = ? AND p.deleted_at IS NULL AND g.deleted_at IS NULL
 		GROUP BY g.id, g.full_name, g.email, g.status
 		ORDER BY g.full_name
-	`, clinicID)
-	if err != nil {
+	`, clinicID).Scan(&guardians).Error; err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	var guardians []backofficeRelatedGuardian
-	for rows2.Next() {
-		var g backofficeRelatedGuardian
-		if err := rows2.Scan(&g.ID, &g.FullName, &g.Email, &g.Status, &g.PatientsCount); err != nil {
-			rows2.Close()
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-			return
-		}
-		guardians = append(guardians, g)
-	}
-	rows2.Close()
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{

@@ -4,68 +4,69 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 type Address struct {
-	ID          uuid.UUID
-	Street      *string
-	Number      *string
-	Complement  *string
+	ID           uuid.UUID
+	Street       *string
+	Number       *string
+	Complement   *string
 	Neighborhood *string
-	City        *string
-	State       *string
-	Country     *string
-	Zip         *string
+	City         *string
+	State        *string
+	Country      *string
+	Zip          *string
 }
 
-func CreateAddress(ctx context.Context, pool *pgxpool.Pool, a *Address) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := pool.QueryRow(ctx, `
+func CreateAddress(ctx context.Context, db *gorm.DB, a *Address) (uuid.UUID, error) {
+	var res struct{ ID uuid.UUID }
+	err := db.WithContext(ctx).Raw(`
 		INSERT INTO addresses (street, number, complement, neighborhood, city, state, country, zip)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id
-	`, a.Street, a.Number, a.Complement, a.Neighborhood, a.City, a.State, a.Country, a.Zip).Scan(&id)
-	return id, err
+	`, a.Street, a.Number, a.Complement, a.Neighborhood, a.City, a.State, a.Country, a.Zip).Scan(&res).Error
+	return res.ID, err
 }
 
 // CreateAddressTx insere um endereço dentro de uma transação e retorna o ID.
-func CreateAddressTx(ctx context.Context, tx pgx.Tx, a *Address) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `
+func CreateAddressTx(ctx context.Context, tx *gorm.DB, a *Address) (uuid.UUID, error) {
+	var res struct{ ID uuid.UUID }
+	err := tx.WithContext(ctx).Raw(`
 		INSERT INTO addresses (street, number, complement, neighborhood, city, state, country, zip)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id
-	`, a.Street, a.Number, a.Complement, a.Neighborhood, a.City, a.State, a.Country, a.Zip).Scan(&id)
-	return id, err
+	`, a.Street, a.Number, a.Complement, a.Neighborhood, a.City, a.State, a.Country, a.Zip).Scan(&res).Error
+	return res.ID, err
 }
 
-func GetAddressByID(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID) (*Address, error) {
+func GetAddressByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*Address, error) {
 	var a Address
-	err := pool.QueryRow(ctx, `
+	err := db.WithContext(ctx).Raw(`
 		SELECT id, street, number, complement, neighborhood, city, state, country, zip
-		FROM addresses WHERE id = $1
-	`, id).Scan(&a.ID, &a.Street, &a.Number, &a.Complement, &a.Neighborhood, &a.City, &a.State, &a.Country, &a.Zip)
+		FROM addresses WHERE id = ?
+	`, id).Scan(&a).Error
 	if err != nil {
 		return nil, err
+	}
+	if a.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &a, nil
 }
 
-func UpdateAddress(ctx context.Context, pool *pgxpool.Pool, id uuid.UUID, a *Address) error {
-	_, err := pool.Exec(ctx, `
+func UpdateAddress(ctx context.Context, db *gorm.DB, id uuid.UUID, a *Address) error {
+	return db.WithContext(ctx).Exec(`
 		UPDATE addresses
-		SET street = $1, number = $2, complement = $3, neighborhood = $4, city = $5, state = $6, country = $7, zip = $8
-		WHERE id = $9
-	`, a.Street, a.Number, a.Complement, a.Neighborhood, a.City, a.State, a.Country, a.Zip, id)
-	return err
+		SET street = ?, number = ?, complement = ?, neighborhood = ?, city = ?, state = ?, country = ?, zip = ?
+		WHERE id = ?
+	`, a.Street, a.Number, a.Complement, a.Neighborhood, a.City, a.State, a.Country, a.Zip, id).Error
 }
 
 // CleanupOrphanAddresses remove endereços que não são referenciados em legal_guardians, professionals ou patients.
 // Retorna o número de linhas removidas.
-func CleanupOrphanAddresses(ctx context.Context, pool *pgxpool.Pool) (int64, error) {
-	result, err := pool.Exec(ctx, `
+func CleanupOrphanAddresses(ctx context.Context, db *gorm.DB) (int64, error) {
+	result := db.WithContext(ctx).Exec(`
 		DELETE FROM addresses
 		WHERE id NOT IN (
 			SELECT address_id FROM legal_guardians WHERE address_id IS NOT NULL
@@ -75,8 +76,5 @@ func CleanupOrphanAddresses(ctx context.Context, pool *pgxpool.Pool) (int64, err
 			SELECT address_id FROM patients WHERE address_id IS NOT NULL
 		)
 	`)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	return result.RowsAffected, result.Error
 }

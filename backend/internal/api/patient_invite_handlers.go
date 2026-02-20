@@ -2,16 +2,17 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/prontuario/backend/internal/auth"
 	"github.com/prontuario/backend/internal/crypto"
 	"github.com/prontuario/backend/internal/repo"
+	"gorm.io/gorm"
 )
 
 type CreatePatientInviteRequest struct {
@@ -52,7 +53,7 @@ func (h *Handler) CreatePatientInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	inv, err := repo.CreatePatientInvite(r.Context(), h.Pool, cid, req.Email, req.FullName, expiresAt)
+	inv, err := repo.CreatePatientInvite(r.Context(), h.DB, cid, req.Email, req.FullName, expiresAt)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -81,7 +82,7 @@ func (h *Handler) GetPatientInviteByToken(w http.ResponseWriter, r *http.Request
 		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
-	inv, err := repo.GetPatientInviteByToken(r.Context(), h.Pool, token)
+	inv, err := repo.GetPatientInviteByToken(r.Context(), h.DB, token)
 	if err != nil {
 		http.Error(w, `{"error":"invalid or expired token"}`, http.StatusNotFound)
 		return
@@ -91,8 +92,7 @@ func (h *Handler) GetPatientInviteByToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var clinicName string
-	errSc := h.Pool.QueryRow(r.Context(), "SELECT name FROM clinics WHERE id = $1", inv.ClinicID).Scan(&clinicName)
-	_ = errSc
+	_ = h.DB.WithContext(r.Context()).Raw("SELECT name FROM clinics WHERE id = ?", inv.ClinicID).Scan(&clinicName)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"email":       inv.GuardianEmail,
@@ -146,7 +146,7 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := repo.GetPatientInviteByToken(r.Context(), h.Pool, req.Token)
+	inv, err := repo.GetPatientInviteByToken(r.Context(), h.DB, req.Token)
 	if err != nil {
 		http.Error(w, `{"error":"invalid or expired token"}`, http.StatusBadRequest)
 		return
@@ -179,108 +179,70 @@ func (h *Handler) AcceptPatientInvite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Transação: upsert guardião + cria paciente + vínculo + aceita invite.
-	tx, err := h.Pool.Begin(r.Context())
-	if err != nil {
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
-	}
-	defer func() { _ = tx.Rollback(r.Context()) }()
-
-	// Recarrega o invite na TX (evita race).
-	var inviteID uuid.UUID
-	var guardianEmail string
-	var clinicID uuid.UUID
-	err = tx.QueryRow(r.Context(), `
-		SELECT id, guardian_email, clinic_id
-		FROM patient_invites
-		WHERE id = $1 AND status = 'PENDING' AND expires_at > now()
-	`, inv.ID).Scan(&inviteID, &guardianEmail, &clinicID)
-	if err != nil {
-		http.Error(w, `{"error":"invalid or expired token"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Criar endereço na tabela addresses e obter ID
 	addr := AddressInputToRepo(addrInput)
-	addressID, err := repo.CreateAddressTx(r.Context(), tx, addr)
+	err = h.DB.WithContext(r.Context()).Transaction(func(tx *gorm.DB) error {
+		var row struct {
+			InviteID      uuid.UUID
+			GuardianEmail string
+			ClinicID      uuid.UUID
+		}
+		if err := tx.Raw(`
+			SELECT id as invite_id, guardian_email, clinic_id
+			FROM patient_invites
+			WHERE id = ? AND status = 'PENDING' AND expires_at > now()
+		`, inv.ID).Scan(&row).Error; err != nil || row.InviteID == uuid.Nil {
+			return errors.New("invalid or expired token")
+		}
+		addressID, err := repo.CreateAddressTx(r.Context(), tx, addr)
+		if err != nil {
+			return err
+		}
+		var guardianID uuid.UUID
+		if err := tx.Raw(`SELECT id FROM legal_guardians WHERE email = ? AND deleted_at IS NULL`, row.GuardianEmail).Scan(&guardianID).Error; err != nil || guardianID == uuid.Nil {
+			guardianID = uuid.New()
+			if err := tx.Exec(`
+				INSERT INTO legal_guardians (id, email, full_name, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, birth_date, auth_provider, status)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL'::auth_provider_enum, 'ACTIVE')
+			`, guardianID, row.GuardianEmail, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, addressID, req.GuardianBirthDate).Error; err != nil {
+				return errors.New("email ou cpf já utilizado")
+			}
+		} else {
+			if err := tx.Exec(`
+				UPDATE legal_guardians
+				SET full_name = COALESCE(NULLIF(?::text, ''), full_name),
+				    cpf_encrypted = ?, cpf_nonce = ?, cpf_key_version = ?::text, cpf_hash = ?::text,
+				    address_id = ?, birth_date = NULLIF(?::text, '')::date, updated_at = now()
+				WHERE id = ? AND deleted_at IS NULL
+			`, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, addressID, req.GuardianBirthDate, guardianID).Error; err != nil {
+				return err
+			}
+		}
+		patientName := req.PatientFullName
+		if req.SamePerson || patientName == "" {
+			patientName = req.GuardianFullName
+		}
+		patientID := uuid.New()
+		if err := tx.Exec(`INSERT INTO patients (id, clinic_id, full_name, birth_date) VALUES (?, ?, ?, NULLIF(?::text, '')::date)`, patientID, row.ClinicID, patientName, req.PatientBirthDate).Error; err != nil {
+			return err
+		}
+		relation := "Titular"
+		if !req.SamePerson && req.PatientFullName != "" {
+			relation = "Responsável"
+		}
+		if err := tx.Exec(`INSERT INTO patient_guardians (patient_id, legal_guardian_id, relation, can_view_medical_record, can_view_contracts) VALUES (?, ?, ?, true, true)`, patientID, guardianID, relation).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`UPDATE patient_invites SET status = 'ACCEPTED', updated_at = now() WHERE id = ?`, row.InviteID).Error
+	})
 	if err != nil {
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
-	}
-
-	// Upsert do responsável por email (com address_id)
-	var guardianID uuid.UUID
-	err = tx.QueryRow(r.Context(), `SELECT id FROM legal_guardians WHERE email = $1 AND deleted_at IS NULL`, guardianEmail).Scan(&guardianID)
-	if err != nil {
-		if err != pgx.ErrNoRows {
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		if err.Error() == "invalid or expired token" {
+			http.Error(w, `{"error":"invalid or expired token"}`, http.StatusBadRequest)
 			return
 		}
-		// Cria novo.
-		guardianID = uuid.New()
-		_, err = tx.Exec(r.Context(), `
-			INSERT INTO legal_guardians (id, email, full_name, cpf_encrypted, cpf_nonce, cpf_key_version, cpf_hash, address_id, birth_date, auth_provider, status)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'LOCAL'::auth_provider_enum, 'ACTIVE')
-		`, guardianID, guardianEmail, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, addressID, req.GuardianBirthDate)
-		if err != nil {
+		if err.Error() == "email ou cpf já utilizado" {
 			http.Error(w, `{"error":"email ou cpf já utilizado"}`, http.StatusBadRequest)
 			return
 		}
-	} else {
-		// Atualiza dados complementares do existente (mantém GoogleSub/senha).
-		_, err = tx.Exec(r.Context(), `
-			UPDATE legal_guardians
-			SET full_name = COALESCE(NULLIF($1::text, ''), full_name),
-			    cpf_encrypted = $2,
-			    cpf_nonce = $3,
-			    cpf_key_version = $4::text,
-			    cpf_hash = $5::text,
-			    address_id = $6,
-			    birth_date = NULLIF($7::text, '')::date,
-			    updated_at = now()
-			WHERE id = $8 AND deleted_at IS NULL
-		`, req.GuardianFullName, cpfEnc, nonce, keyVer, cpfHash, addressID, req.GuardianBirthDate, guardianID)
-		if err != nil {
-			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-			return
-		}
-	}
-
-	patientName := req.PatientFullName
-	if req.SamePerson || patientName == "" {
-		patientName = req.GuardianFullName
-	}
-
-	patientID := uuid.New()
-	_, err = tx.Exec(r.Context(), `
-		INSERT INTO patients (id, clinic_id, full_name, birth_date)
-		VALUES ($1, $2, $3, NULLIF($4::text, '')::date)
-	`, patientID, clinicID, patientName, req.PatientBirthDate)
-	if err != nil {
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
-	}
-
-	relation := "Titular"
-	if !req.SamePerson && req.PatientFullName != "" {
-		relation = "Responsável"
-	}
-	_, err = tx.Exec(r.Context(), `
-		INSERT INTO patient_guardians (patient_id, legal_guardian_id, relation, can_view_medical_record, can_view_contracts)
-		VALUES ($1, $2, $3, true, true)
-	`, patientID, guardianID, relation)
-	if err != nil {
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
-	}
-
-	_, err = tx.Exec(r.Context(), `UPDATE patient_invites SET status = 'ACCEPTED', updated_at = now() WHERE id = $1`, inviteID)
-	if err != nil {
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}

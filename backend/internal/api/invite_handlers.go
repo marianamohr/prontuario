@@ -36,19 +36,19 @@ func (h *Handler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Evita criar múltiplos convites para o mesmo e-mail se o profissional já existe.
-	if _, err := repo.ProfessionalByEmail(r.Context(), h.Pool, req.Email); err == nil {
+	if _, err := repo.ProfessionalByEmail(r.Context(), h.DB, req.Email); err == nil {
 		http.Error(w, `{"error":"professional já existe para este email"}`, http.StatusConflict)
 		return
 	}
 	// Cria uma clinic interna para este profissional (modelo 1:1).
-	var clinicID uuid.UUID
-	err := h.Pool.QueryRow(r.Context(), "INSERT INTO clinics (name) VALUES ($1) RETURNING id", req.FullName).Scan(&clinicID)
-	if err != nil {
+	var res struct{ ID uuid.UUID }
+	err := h.DB.WithContext(r.Context()).Raw("INSERT INTO clinics (name) VALUES (?) RETURNING id", req.FullName).Scan(&res).Error
+	if err != nil || res.ID == uuid.Nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	inv, err := repo.CreateProfessionalInvite(r.Context(), h.Pool, req.Email, req.FullName, clinicID, expiresAt)
+	inv, err := repo.CreateProfessionalInvite(r.Context(), h.DB, req.Email, req.FullName, res.ID, expiresAt)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -77,7 +77,7 @@ func (h *Handler) ListInvites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := ParseLimitOffset(r)
-	list, total, err := repo.ListProfessionalInvitesPaginated(r.Context(), h.Pool, limit, offset)
+	list, total, err := repo.ListProfessionalInvitesPaginated(r.Context(), h.DB, limit, offset)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -118,7 +118,7 @@ func (h *Handler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
-	if err := repo.DeleteProfessionalInvite(r.Context(), h.Pool, id); err != nil {
+	if err := repo.DeleteProfessionalInvite(r.Context(), h.DB, id); err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
@@ -142,7 +142,7 @@ func (h *Handler) ResendInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid id"}`, http.StatusBadRequest)
 		return
 	}
-	inv, err := repo.GetProfessionalInviteByID(r.Context(), h.Pool, id)
+	inv, err := repo.GetProfessionalInviteByID(r.Context(), h.DB, id)
 	if err != nil {
 		http.Error(w, `{"error":"invite not found"}`, http.StatusNotFound)
 		return
@@ -174,7 +174,7 @@ func (h *Handler) GetInviteByToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"token required"}`, http.StatusBadRequest)
 		return
 	}
-	inv, err := repo.GetProfessionalInviteByToken(r.Context(), h.Pool, token)
+	inv, err := repo.GetProfessionalInviteByToken(r.Context(), h.DB, token)
 	if err != nil {
 		http.Error(w, `{"error":"invalid or expired token"}`, http.StatusNotFound)
 		return
@@ -184,8 +184,7 @@ func (h *Handler) GetInviteByToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var clinicName string
-	errSc := h.Pool.QueryRow(r.Context(), "SELECT name FROM clinics WHERE id = $1", inv.ClinicID).Scan(&clinicName)
-	_ = errSc
+	_ = h.DB.WithContext(r.Context()).Raw("SELECT name FROM clinics WHERE id = ?", inv.ClinicID).Scan(&clinicName)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"email":       inv.Email,
@@ -229,7 +228,7 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"address invalid (8-digit ZIP; street, neighborhood, city, state, country required)"}`, http.StatusBadRequest)
 		return
 	}
-	inv, err := repo.GetProfessionalInviteByToken(r.Context(), h.Pool, req.Token)
+	inv, err := repo.GetProfessionalInviteByToken(r.Context(), h.DB, req.Token)
 	if err != nil {
 		http.Error(w, `{"error":"invalid or expired token"}`, http.StatusBadRequest)
 		return
@@ -267,7 +266,7 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	addr := AddressInputToRepo(addrInput)
-	addressID, err := repo.CreateAddress(r.Context(), h.Pool, addr)
+	addressID, err := repo.CreateAddress(r.Context(), h.DB, addr)
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
@@ -276,7 +275,7 @@ func (h *Handler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	if req.MaritalStatus != "" {
 		maritalStatus = &req.MaritalStatus
 	}
-	if err := repo.AcceptProfessionalInvite(r.Context(), h.Pool, inv.ID, passwordHash, req.FullName, tradeName, req.BirthDate, cpfEnc, nonce, &keyVer, cpfHash, &addressID, maritalStatus); err != nil {
+	if err := repo.AcceptProfessionalInvite(r.Context(), h.DB, inv.ID, passwordHash, req.FullName, tradeName, req.BirthDate, cpfEnc, nonce, &keyVer, cpfHash, &addressID, maritalStatus); err != nil {
 		http.Error(w, `{"error":"could not complete registration"}`, http.StatusBadRequest)
 		return
 	}

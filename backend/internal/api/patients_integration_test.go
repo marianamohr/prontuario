@@ -13,12 +13,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prontuario/backend/internal/auth"
 	"github.com/prontuario/backend/internal/config"
 	"github.com/prontuario/backend/internal/middleware"
 	"github.com/prontuario/backend/internal/seed"
 	"github.com/prontuario/backend/internal/testutil"
+	"gorm.io/gorm"
 )
 
 func newAPIRouterForPatients(h *Handler, jwtSecret []byte) http.Handler {
@@ -31,10 +31,13 @@ func newAPIRouterForPatients(h *Handler, jwtSecret []byte) http.Handler {
 	return middleware.RequestID(r)
 }
 
-func getClinicAndProfessionalID(ctx context.Context, pool *pgxpool.Pool, email string) (uuid.UUID, uuid.UUID) {
-	var clinicID, profID uuid.UUID
-	_ = pool.QueryRow(ctx, `SELECT id, clinic_id FROM professionals WHERE lower(email)=lower($1) LIMIT 1`, email).Scan(&profID, &clinicID)
-	return clinicID, profID
+func getClinicAndProfessionalID(ctx context.Context, db *gorm.DB, email string) (uuid.UUID, uuid.UUID) {
+	var res struct {
+		ID       uuid.UUID
+		ClinicID uuid.UUID
+	}
+	_ = db.WithContext(ctx).Raw(`SELECT id, clinic_id FROM professionals WHERE lower(email)=lower(?) LIMIT 1`, email).Scan(&res)
+	return res.ClinicID, res.ID
 }
 
 func authHeaderForProfessional(t *testing.T, secret []byte, profID uuid.UUID, clinicID uuid.UUID) string {
@@ -49,25 +52,28 @@ func authHeaderForProfessional(t *testing.T, secret []byte, profID uuid.UUID, cl
 
 func TestIntegration_TenantIsolation_ListPatients(t *testing.T) {
 	ctx := context.Background()
-	pool, url := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, url := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set for integration tests")
 		return
 	}
-	defer pool.Close()
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
 	_ = url
-	if err := testutil.MustMigrate(ctx, pool); err != nil {
+	if err := testutil.MustMigrate(ctx, db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	_ = seed.Run(ctx, pool)
+	_ = seed.Run(ctx, db)
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
 	cfg.JWTSecret = jwtSecret
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 
-	clinicA, profA := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
-	clinicB, profB := getClinicAndProfessionalID(ctx, pool, "profb@clinica-b.local")
+	clinicA, profA := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
+	clinicB, profB := getClinicAndProfessionalID(ctx, db, "profb@clinica-b.local")
 	if clinicA == uuid.Nil || clinicB == uuid.Nil || profA == uuid.Nil || profB == uuid.Nil {
 		t.Fatal("seed did not create expected professionals")
 	}
@@ -111,22 +117,25 @@ func TestIntegration_TenantIsolation_ListPatients(t *testing.T) {
 
 func TestIntegration_PatientCPFOptional_UniquePerClinic(t *testing.T) {
 	ctx := context.Background()
-	pool, _ := testutil.OpenPool(ctx)
-	if pool == nil {
+	db, _ := testutil.OpenDB(ctx)
+	if db == nil {
 		t.Skip("DATABASE_URL not set for integration tests")
 		return
 	}
-	defer pool.Close()
-	_ = testutil.MustMigrate(ctx, pool)
-	_ = seed.Run(ctx, pool)
+	sqlDB, _ := db.DB()
+	if sqlDB != nil {
+		defer sqlDB.Close()
+	}
+	_ = testutil.MustMigrate(ctx, db)
+	_ = seed.Run(ctx, db)
 
 	cfg := config.Load()
 	jwtSecret := []byte("test-jwt-secret-min-32-chars-xxxxxxxxxxxx")
 	cfg.JWTSecret = jwtSecret
-	h := &Handler{Pool: pool, Cfg: cfg}
+	h := &Handler{DB: db, Cfg: cfg}
 	srv := newAPIRouterForPatients(h, jwtSecret)
 
-	clinicA, profA := getClinicAndProfessionalID(ctx, pool, "profa@clinica-a.local")
+	clinicA, profA := getClinicAndProfessionalID(ctx, db, "profa@clinica-a.local")
 	if clinicA == uuid.Nil || profA == uuid.Nil {
 		t.Fatal("seed did not create professional A")
 	}
