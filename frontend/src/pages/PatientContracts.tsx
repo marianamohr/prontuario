@@ -12,6 +12,8 @@ import {
   InputLabel,
   TextField,
   IconButton,
+  Tabs,
+  Tab,
 } from '@mui/material'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { useAuth } from '../contexts/AuthContext'
@@ -45,11 +47,15 @@ export function PatientContracts() {
   const [resendingId, setResendingId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [deletingContractId, setDeletingContractId] = useState<string | null>(null)
+  const [scheduleMode, setScheduleMode] = useState<'single' | 'recurring'>('recurring')
   const [scheduleRules, setScheduleRules] = useState<api.ScheduleRule[]>([])
+  const [scheduleSpecificDates, setScheduleSpecificDates] = useState<api.ScheduleSpecificDate[]>([])
   const [contractNumAppointments, setContractNumAppointments] = useState<number | ''>('')
   const [availableSlots, setAvailableSlots] = useState<api.AvailableSlotItem[]>([])
   const [configuredDays, setConfiguredDays] = useState<number[]>([])
   const [slotsLoading, setSlotsLoading] = useState(false)
+  const [singleDatePick, setSingleDatePick] = useState('')
+  const [singleTimePick, setSingleTimePick] = useState('')
   const [endingContractId, setEndingContractId] = useState<string | null>(null)
   const [endContractDate, setEndContractDate] = useState('')
   const [showAllContracts, setShowAllContracts] = useState(false)
@@ -132,6 +138,18 @@ export function PatientContracts() {
     return byDay
   }, [availableSlots])
 
+  const slotsByDate = useMemo(() => {
+    const out: Record<string, string[]> = {}
+    for (const s of availableSlots) {
+      if (!out[s.date]) out[s.date] = []
+      if (!out[s.date].includes(s.start_time)) out[s.date].push(s.start_time)
+    }
+    for (const d of Object.keys(out)) {
+      out[d].sort()
+    }
+    return out
+  }, [availableSlots])
+
   const openContractModal = () => {
     setContractModalOpen(true)
     setContractMessage('')
@@ -140,8 +158,12 @@ export function PatientContracts() {
     setContractDataInicio('')
     setContractValor('')
     setContractPeriodicidade('')
+    setScheduleMode('recurring')
     setScheduleRules([])
+    setScheduleSpecificDates([])
     setContractNumAppointments('')
+    setSingleDatePick('')
+    setSingleTimePick('')
     setAvailableSlots([])
     setConfiguredDays([])
     api.listContractTemplates().then((r) => {
@@ -170,9 +192,15 @@ export function PatientContracts() {
       setContractMessage('Informe um valor numérico válido (ex.: 150 ou 150,50).')
       return
     }
+    if (scheduleMode === 'single' && scheduleSpecificDates.length === 0) {
+      setContractMessage('Para consulta única, adicione ao menos uma data.')
+      return
+    }
     setSendingContract(true)
     setContractMessage('')
     try {
+      const isSingle = scheduleMode === 'single' && scheduleSpecificDates.length > 0
+      const isRecurring = scheduleMode === 'recurring' && scheduleRules.length > 0
       await api.sendContractForPatient(
         patientId,
         selectedGuardianId,
@@ -181,10 +209,12 @@ export function PatientContracts() {
         undefined,
         valorFormatado,
         contractPeriodicidade.trim() || undefined,
-        scheduleRules.length > 0 ? scheduleRules : undefined,
+        isRecurring ? scheduleRules : undefined,
         undefined,
         undefined,
-        contractNumAppointments !== '' && Number(contractNumAppointments) > 0 ? Number(contractNumAppointments) : undefined
+        isRecurring && contractNumAppointments !== '' && Number(contractNumAppointments) > 0 ? Number(contractNumAppointments) : undefined,
+        isSingle ? 'single' : isRecurring ? 'recurring' : undefined,
+        isSingle ? scheduleSpecificDates : undefined
       )
       setContractMessage('Contrato enviado por e-mail para assinatura.')
       api.listPatientContracts(patientId).then((r) => setPatientContracts(r.contracts)).catch(() => {})
@@ -506,15 +536,56 @@ export function PatientContracts() {
             <TextField label="Periodicidade (opcional)" size="small" fullWidth value={contractPeriodicidade} onChange={(e) => setContractPeriodicidade(e.target.value)} placeholder="Ex.: semanal, quinzenal, mensal" />
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <TextField type="number" label="Quantidade de agendamentos (opcional)" size="small" fullWidth value={contractNumAppointments === '' ? '' : contractNumAppointments} onChange={(e) => { const v = e.target.value; setContractNumAppointments(v === '' ? '' : Math.max(1, parseInt(v, 10) || 1)) }} placeholder="Ex.: 4" inputProps={{ min: 1 }} />
-            <Typography variant="caption" color="text.secondary">Pré-agendar consultas (opcional). Os horários serão agendados até 2030; encerramento ou cancelamento do contrato afetam apenas da data escolhida (ou de hoje) para frente.</Typography>
-            {slotsLoading && <Typography variant="body2" color="text.secondary">Carregando horários…</Typography>}
-            {!slotsLoading && availableSlots.length === 0 && contractModalOpen && (
-              <Typography variant="body2" color="text.secondary">Configure a agenda em Configurações para escolher horários.</Typography>
+            <Tabs value={scheduleMode} onChange={(_, v) => { setScheduleMode(v); if (v === 'single') setScheduleRules([]); else setScheduleSpecificDates([]) }} sx={{ minHeight: 36, mb: 0.5 }}>
+              <Tab label="Consulta única" value="single" />
+              <Tab label="Com recorrência" value="recurring" />
+            </Tabs>
+            {scheduleMode === 'single' && (
+              <>
+                <Typography variant="caption" color="text.secondary">Escolha as datas e horários das consultas (ex.: retornos).</Typography>
+                {slotsLoading && <Typography variant="body2" color="text.secondary">Carregando horários…</Typography>}
+                {!slotsLoading && availableSlots.length > 0 && (
+                  <>
+                    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <TextField type="date" size="small" value={singleDatePick} onChange={(e) => { setSingleDatePick(e.target.value); setSingleTimePick('') }} InputLabelProps={{ shrink: true }} sx={{ minWidth: 140 }} />
+                      <FormControl size="small" sx={{ minWidth: 100 }}>
+                        <Select displayEmpty value={singleTimePick} onChange={(e) => setSingleTimePick(e.target.value)}>
+                          <MenuItem value="">Horário</MenuItem>
+                          {(slotsByDate[singleDatePick] || []).map((t) => (
+                            <MenuItem key={t} value={t}>{t}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Button size="small" variant="outlined" disabled={!singleDatePick || !singleTimePick} onClick={() => {
+                        if (!singleDatePick || !singleTimePick) return
+                        if (scheduleSpecificDates.some((x) => x.date === singleDatePick && x.slot_time === singleTimePick)) return
+                        setScheduleSpecificDates((prev) => [...prev, { date: singleDatePick, slot_time: singleTimePick }].sort((a, b) => a.date.localeCompare(b.date) || a.slot_time.localeCompare(b.slot_time)))
+                      }}>Adicionar</Button>
+                    </Box>
+                    {scheduleSpecificDates.map((x, i) => (
+                      <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body2">{new Date(x.date + 'T12:00:00').toLocaleDateString('pt-BR')} {x.slot_time}</Typography>
+                        <IconButton size="small" color="error" onClick={() => setScheduleSpecificDates((prev) => prev.filter((_, j) => j !== i))} aria-label="Remover"><DeleteOutlineIcon fontSize="small" /></IconButton>
+                      </Box>
+                    ))}
+                  </>
+                )}
+                {!slotsLoading && availableSlots.length === 0 && contractModalOpen && (
+                  <Typography variant="body2" color="text.secondary">Informe a data de início e configure a agenda para escolher datas.</Typography>
+                )}
+              </>
             )}
-            {(() => {
-              const daysToShow = configuredDays.length > 0 ? configuredDays : [0, 1, 2, 3, 4, 5, 6]
-              return scheduleRules.map((r, i) => {
+            {scheduleMode === 'recurring' && (
+              <>
+                <TextField type="number" label="Quantidade de agendamentos (opcional)" size="small" fullWidth value={contractNumAppointments === '' ? '' : contractNumAppointments} onChange={(e) => { const v = e.target.value; setContractNumAppointments(v === '' ? '' : Math.max(1, parseInt(v, 10) || 1)) }} placeholder="Ex.: 4" inputProps={{ min: 1 }} />
+                <Typography variant="caption" color="text.secondary">Pré-agendar consultas (opcional). Os horários serão agendados até 2030; encerramento ou cancelamento do contrato afetam apenas da data escolhida (ou de hoje) para frente.</Typography>
+                {slotsLoading && <Typography variant="body2" color="text.secondary">Carregando horários…</Typography>}
+                {!slotsLoading && availableSlots.length === 0 && contractModalOpen && (
+                  <Typography variant="body2" color="text.secondary">Configure a agenda em Configurações para escolher horários.</Typography>
+                )}
+                {(() => {
+                  const daysToShow = configuredDays.length > 0 ? configuredDays : [0, 1, 2, 3, 4, 5, 6]
+                  return scheduleRules.map((r, i) => {
                 const timesForDay = availableTimesByDay[r.day_of_week] || []
                 const slotTimeValid = timesForDay.includes(r.slot_time)
                 return (
@@ -548,12 +619,14 @@ export function PatientContracts() {
                 )
               })
             })()}
-            <Button size="small" variant="outlined" disabled={slotsLoading || availableSlots.length === 0} onClick={() => {
-              const candidateDays = configuredDays.length > 0 ? configuredDays : Object.keys(availableTimesByDay).map(Number).sort((a, b) => a - b)
-              const firstDay = candidateDays.find((d) => (availableTimesByDay[d]?.length ?? 0) > 0) ?? candidateDays[0] ?? 1
-              const firstTime = availableTimesByDay[firstDay]?.[0] ?? '09:00'
-              setScheduleRules((prev) => [...prev, { day_of_week: firstDay, slot_time: firstTime }])
-            }}>+ Adicionar horário</Button>
+                <Button size="small" variant="outlined" disabled={slotsLoading || availableSlots.length === 0} onClick={() => {
+                  const candidateDays = configuredDays.length > 0 ? configuredDays : Object.keys(availableTimesByDay).map(Number).sort((a, b) => a - b)
+                  const firstDay = candidateDays.find((d) => (availableTimesByDay[d]?.length ?? 0) > 0) ?? candidateDays[0] ?? 1
+                  const firstTime = availableTimesByDay[firstDay]?.[0] ?? '09:00'
+                  setScheduleRules((prev) => [...prev, { day_of_week: firstDay, slot_time: firstTime }])
+                }}>+ Adicionar horário</Button>
+              </>
+            )}
           </Box>
         </Box>
         {contractMessage && <Alert severity={contractMessage.includes('Falha') ? 'error' : 'success'} sx={{ mt: 1 }}>{contractMessage}</Alert>}

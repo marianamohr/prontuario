@@ -398,6 +398,8 @@ export function listPatientGuardians(patientId: string) {
 
 export type ScheduleRule = { day_of_week: number; slot_time: string }
 
+export type ScheduleSpecificDate = { date: string; slot_time: string }
+
 export function sendContractForPatient(
   patientId: string,
   guardian_id: string,
@@ -409,7 +411,9 @@ export function sendContractForPatient(
   schedule_rules?: ScheduleRule[],
   sign_place?: string,
   sign_date?: string,
-  num_appointments?: number
+  num_appointments?: number,
+  schedule_mode?: 'single' | 'recurring',
+  schedule_specific_dates?: ScheduleSpecificDate[]
 ) {
   const body: {
     guardian_id: string
@@ -422,6 +426,8 @@ export function sendContractForPatient(
     sign_place?: string
     sign_date?: string
     num_appointments?: number
+    schedule_mode?: 'single' | 'recurring'
+    schedule_specific_dates?: ScheduleSpecificDate[]
   } = { guardian_id, template_id }
   if (data_inicio) body.data_inicio = data_inicio
   if (data_fim) body.data_fim = data_fim
@@ -431,6 +437,8 @@ export function sendContractForPatient(
   if (sign_place !== undefined && sign_place.trim() !== '') body.sign_place = sign_place.trim()
   if (sign_date !== undefined && sign_date.trim() !== '') body.sign_date = sign_date.trim()
   if (num_appointments !== undefined && num_appointments > 0) body.num_appointments = num_appointments
+  if (schedule_mode) body.schedule_mode = schedule_mode
+  if (schedule_specific_dates && schedule_specific_dates.length > 0) body.schedule_specific_dates = schedule_specific_dates
   return api<{ message: string; contract_id: string }>(`/api/patients/${patientId}/send-contract`, {
     method: 'POST',
     json: body,

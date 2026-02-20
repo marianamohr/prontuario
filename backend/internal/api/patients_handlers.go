@@ -677,10 +677,15 @@ type SendContractRequest struct {
 	SignPlace       string `json:"sign_place"`       // opcional, local de assinatura (placeholder [LOCAL])
 	SignDate        string `json:"sign_date"`        // opcional, data prevista para assinatura YYYY-MM-DD (placeholder [DATA] até assinar)
 	NumAppointments *int   `json:"num_appointments"` // opcional, quantidade de agendamentos a criar ao assinar (ex.: 4); null = sem limite
+	ScheduleMode    string `json:"schedule_mode"`    // "single" = consulta única (datas específicas), "recurring" = com recorrência (regras semanais)
 	ScheduleRules   []struct {
 		DayOfWeek int    `json:"day_of_week"` // 0=domingo .. 6=sábado
 		SlotTime  string `json:"slot_time"`   // "15:00"
-	} `json:"schedule_rules"` // opcional, pré-agendamento (ex.: toda terça 15h)
+	} `json:"schedule_rules"` // usado quando schedule_mode == "recurring"
+	ScheduleSpecificDates []struct {
+		Date     string `json:"date"`      // YYYY-MM-DD
+		SlotTime string `json:"slot_time"` // "08:00"
+	} `json:"schedule_specific_dates"` // usado quando schedule_mode == "single"
 }
 
 func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request) {
@@ -790,12 +795,64 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 	if req.NumAppointments != nil && *req.NumAppointments > 0 {
 		numAppointmentsPtr = req.NumAppointments
 	}
-	// Validar e pré-criar slots: se há schedule_rules, validar contra config e ocupação antes de criar o contrato
+	// Modo "single" (consulta única): exige schedule_specific_dates
+	if req.ScheduleMode == "single" {
+		if len(req.ScheduleSpecificDates) == 0 {
+			http.Error(w, `{"error":"schedule_mode single requires at least one schedule_specific_dates entry"}`, http.StatusBadRequest)
+			return
+		}
+		if profID == nil {
+			http.Error(w, `{"error":"schedule_mode single requires professional context"}`, http.StatusBadRequest)
+			return
+		}
+		var fromSpec, toSpec time.Time
+		for i, sd := range req.ScheduleSpecificDates {
+			t, err := time.Parse("2006-01-02", sd.Date)
+			if err != nil || strings.TrimSpace(sd.SlotTime) == "" {
+				http.Error(w, `{"error":"schedule_specific_dates: invalid date or slot_time"}`, http.StatusBadRequest)
+				return
+			}
+			if i == 0 {
+				fromSpec = t
+				toSpec = t
+			} else {
+				if t.Before(fromSpec) {
+					fromSpec = t
+				}
+				if t.After(toSpec) {
+					toSpec = t
+				}
+			}
+		}
+		slots, err := repo.ListAvailableSlotsForProfessional(r.Context(), h.DB, *profID, cid, fromSpec, toSpec, nil)
+		if err != nil {
+			log.Printf("[send-contract] ListAvailableSlotsForProfessional (specific): %v", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		slotSet := make(map[string]bool)
+		for _, s := range slots {
+			slotSet[s.Date+"|"+s.StartTime] = true
+		}
+		for _, sd := range req.ScheduleSpecificDates {
+			slotNorm := strings.TrimSpace(sd.SlotTime)
+			if len(slotNorm) > 5 && slotNorm[5] == ':' {
+				slotNorm = slotNorm[:5]
+			}
+			key := sd.Date + "|" + slotNorm
+			if !slotSet[key] {
+				http.Error(w, `{"error":"Horário fora da configuração da agenda ou já ocupado"}`, http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	// Validar e pré-criar slots: se há schedule_rules (recorrência), validar contra config e ocupação antes de criar o contrato
 	var scheduleRulesParsed []struct {
 		DayOfWeek int
 		SlotTime  time.Time
 	}
-	for _, r := range req.ScheduleRules {
+	if req.ScheduleMode != "single" {
+		for _, r := range req.ScheduleRules {
 		if r.DayOfWeek < 0 || r.DayOfWeek > 6 || r.SlotTime == "" {
 			continue
 		}
@@ -810,6 +867,7 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 			DayOfWeek int
 			SlotTime  time.Time
 		}{r.DayOfWeek, t})
+		}
 	}
 	if len(scheduleRulesParsed) > 0 && profID != nil {
 		start := time.Now()
@@ -865,7 +923,22 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
-	if len(req.ScheduleRules) > 0 {
+	if req.ScheduleMode == "single" && len(req.ScheduleSpecificDates) > 0 && profID != nil {
+		dates := make([]struct{ Date string; SlotTime string }, 0, len(req.ScheduleSpecificDates))
+		for _, sd := range req.ScheduleSpecificDates {
+			slotNorm := strings.TrimSpace(sd.SlotTime)
+			if len(slotNorm) > 5 {
+				slotNorm = slotNorm[:5]
+			}
+			dates = append(dates, struct{ Date string; SlotTime string }{Date: sd.Date, SlotTime: slotNorm})
+		}
+		if err := repo.CreateContractScheduleDates(r.Context(), h.DB, contractID, dates); err != nil {
+			log.Printf("[send-contract] CreateContractScheduleDates: %v", err)
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		_ = repo.CreateAppointmentsFromContractSpecificDates(r.Context(), h.DB, contractID, cid, *profID, patientID, 50, "PRE_AGENDADO")
+	} else if len(req.ScheduleRules) > 0 {
 		var rules []repo.ContractScheduleRule
 		for _, r := range req.ScheduleRules {
 			if r.DayOfWeek < 0 || r.DayOfWeek > 6 || r.SlotTime == "" {
@@ -880,9 +953,8 @@ func (h *Handler) SendContractForPatient(w http.ResponseWriter, r *http.Request)
 			}
 			rules = append(rules, repo.ContractScheduleRule{ContractID: contractID, DayOfWeek: r.DayOfWeek, SlotTime: t.Format("15:04:05")})
 		}
-		if len(rules) > 0 {
+		if len(rules) > 0 && profID != nil {
 			_ = repo.CreateContractScheduleRules(r.Context(), h.DB, contractID, rules)
-			// Criar compromissos PRE_AGENDADO até 31/12/2030 (slot fica ocupado na agenda)
 			start := time.Now()
 			if startDate != nil {
 				start = *startDate

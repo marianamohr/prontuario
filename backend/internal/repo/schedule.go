@@ -141,6 +141,49 @@ func ListContractScheduleRules(ctx context.Context, db *gorm.DB, contractID uuid
 	return list, err
 }
 
+// ContractScheduleDate is a single-date pre-schedule (consulta única).
+type ContractScheduleDate struct {
+	ID              uuid.UUID
+	ContractID      uuid.UUID
+	AppointmentDate time.Time `gorm:"column:appointment_date;type:date"`
+	SlotTime        string    `gorm:"column:slot_time;type:text"`
+}
+
+func CreateContractScheduleDates(ctx context.Context, db *gorm.DB, contractID uuid.UUID, dates []struct{ Date string; SlotTime string }) error {
+	if len(dates) == 0 {
+		return nil
+	}
+	for _, d := range dates {
+		parsed, err := time.Parse("2006-01-02", d.Date)
+		if err != nil {
+			return fmt.Errorf("invalid date %q: %w", d.Date, err)
+		}
+		slotNorm := strings.TrimSpace(d.SlotTime)
+		if len(slotNorm) > 8 {
+			slotNorm = slotNorm[:8]
+		}
+		if len(slotNorm) < 5 {
+			return fmt.Errorf("invalid slot_time %q", d.SlotTime)
+		}
+		if err := db.WithContext(ctx).Exec(
+			`INSERT INTO contract_schedule_dates (contract_id, appointment_date, slot_time) VALUES (?, ?, ?)`,
+			contractID, parsed.Format("2006-01-02"), slotNorm,
+		).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ListContractScheduleDates(ctx context.Context, db *gorm.DB, contractID uuid.UUID) ([]ContractScheduleDate, error) {
+	var list []ContractScheduleDate
+	err := db.WithContext(ctx).Raw(
+		"SELECT id, contract_id, appointment_date, slot_time FROM contract_schedule_dates WHERE contract_id = ? ORDER BY appointment_date, slot_time",
+		contractID,
+	).Scan(&list).Error
+	return list, err
+}
+
 // Appointment is an agenda appointment.
 // StartTime and EndTime are string (e.g. "09:00:00"); PostgreSQL TIME is returned as string by the driver.
 type Appointment struct {
@@ -350,6 +393,31 @@ func CreateAppointmentsFromContractRulesWithStatus(ctx context.Context, db *gorm
 				return err
 			}
 			created++
+		}
+	}
+	return nil
+}
+
+// CreateAppointmentsFromContractSpecificDates creates one appointment per contract_schedule_dates row (consulta única).
+func CreateAppointmentsFromContractSpecificDates(ctx context.Context, db *gorm.DB, contractID, clinicID, professionalID, patientID uuid.UUID, durationMinutes int, status string) error {
+	if contractID == uuid.Nil {
+		return fmt.Errorf("contract_id is required")
+	}
+	dates, err := ListContractScheduleDates(ctx, db, contractID)
+	if err != nil || len(dates) == 0 {
+		return err
+	}
+	if durationMinutes <= 0 {
+		durationMinutes = 50
+	}
+	for _, d := range dates {
+		startTime, errParse := ParseSlotTimeOnDate(d.SlotTime, d.AppointmentDate)
+		if errParse != nil {
+			return errParse
+		}
+		endTime := startTime.Add(time.Duration(durationMinutes) * time.Minute)
+		if _, err := CreateAppointment(ctx, db, clinicID, professionalID, patientID, &contractID, d.AppointmentDate, startTime, endTime, status, ""); err != nil {
+			return err
 		}
 	}
 	return nil
