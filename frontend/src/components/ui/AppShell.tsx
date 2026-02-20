@@ -65,7 +65,7 @@ export function AppShell() {
 
   const isProfessional = user?.role === 'PROFESSIONAL'
   const drawerBg = isProfessional && branding?.primary_color ? branding.primary_color : theme.palette.primary.main
-  const homeLabel = isProfessional && branding?.home_label ? branding.home_label : 'Prontuário Saúde'
+  const homeLabel = isProfessional && branding?.home_label ? branding.home_label : 'Camihealth'
   const homeImageUrl = isProfessional ? branding?.home_image_url : null
 
   useEffect(() => {

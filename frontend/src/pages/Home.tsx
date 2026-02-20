@@ -56,7 +56,7 @@ export function Home() {
   return (
     <PageContainer>
       <Typography variant="h4" sx={{ mb: 2, color: primaryColor }}>
-        {isProfessional && branding?.home_label ? `Bem-vindo ao ${branding.home_label}` : 'Bem-vindo ao Prontuário Saúde'}
+        {isProfessional && branding?.home_label ? `Bem-vindo ao ${branding.home_label}` : 'Bem-vindo ao Camihealth'}
       </Typography>
 
       {canShowContent && (
