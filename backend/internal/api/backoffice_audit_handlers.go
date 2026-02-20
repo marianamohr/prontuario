@@ -327,7 +327,14 @@ func (h *Handler) BackofficeErrors(w http.ResponseWriter, r *http.Request) {
 		  AND (?::text IS NULL OR UPPER(source) = ?)
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
-	`, from, to, from, to, nullIfEmpty(requestID), nullIfEmpty(severity), nullIfEmpty(source), limit, offset).Scan(&scanRows).Error
+	`,
+		from, from,
+		to, to,
+		nullIfEmpty(requestID), nullIfEmpty(requestID),
+		nullIfEmpty(severity), nullIfEmpty(severity),
+		nullIfEmpty(source), nullIfEmpty(source),
+		limit, offset,
+	).Scan(&scanRows).Error
 	if err != nil {
 		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
