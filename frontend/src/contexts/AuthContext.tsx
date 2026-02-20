@@ -27,7 +27,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   })
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
-  const [loading, setLoading] = useState(!!token)
+  const [loading, setLoading] = useState(() => {
+    const t = localStorage.getItem(TOKEN_KEY)
+    const u = localStorage.getItem(USER_KEY)
+    return !!t && !u
+  })
 
   const login = useCallback((t: string, u: User) => {
     localStorage.setItem(TOKEN_KEY, t)

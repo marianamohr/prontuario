@@ -1,7 +1,27 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { Branding } from '../lib/api'
 import * as api from '../lib/api'
 import { useAuth } from './AuthContext'
+
+const BRANDING_CACHE_KEY = 'prontuario-branding-cache'
+
+function getCachedBranding(): Branding | null {
+  try {
+    const raw = sessionStorage.getItem(BRANDING_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as Branding) : null
+  } catch {
+    return null
+  }
+}
+
+function setCachedBranding(b: Branding | null) {
+  try {
+    if (b) sessionStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(b))
+    else sessionStorage.removeItem(BRANDING_CACHE_KEY)
+  } catch {
+    // ignore
+  }
+}
 
 type BrandingState = {
   branding: Branding | null
@@ -13,24 +33,29 @@ const BrandingContext = createContext<BrandingState | null>(null)
 
 export function BrandingProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
-  const [branding, setBranding] = useState<Branding | null>(null)
+  const userRoleRef = useRef(user?.role)
+  userRoleRef.current = user?.role
+  const [branding, setBranding] = useState<Branding | null>(getCachedBranding)
   const [loading, setLoading] = useState(false)
 
   const refetch = useCallback(async () => {
-    if (user?.role !== 'PROFESSIONAL') {
+    if (userRoleRef.current !== 'PROFESSIONAL') {
       setBranding(null)
+      setCachedBranding(null)
       return
     }
     setLoading(true)
     try {
       const b = await api.getBranding()
       setBranding(b)
+      setCachedBranding(b)
     } catch {
       setBranding(null)
+      setCachedBranding(null)
     } finally {
       setLoading(false)
     }
-  }, [user?.role])
+  }, [])
 
   useEffect(() => {
     refetch()

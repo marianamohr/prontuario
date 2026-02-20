@@ -1,4 +1,3 @@
-import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { CssBaseline } from '@mui/material'
 import App from './App'
@@ -56,11 +55,11 @@ function setupGlobalFrontendErrorHandlers() {
 
 setupGlobalFrontendErrorHandlers()
 
+// StrictMode disabled: in dev it double-mounts the tree, causing Auth/Branding providers to remount
+// and route components (e.g. Appearance, ScheduleConfig) to unmount/remount and appear to freeze.
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ThemeSettingsProvider>
-      <CssBaseline />
-      <App />
-    </ThemeSettingsProvider>
-  </React.StrictMode>,
+  <ThemeSettingsProvider>
+    <CssBaseline />
+    <App />
+  </ThemeSettingsProvider>,
 )

@@ -25,7 +25,6 @@ export function Appearance() {
   const { user } = useAuth()
   const ctx = useBranding()
   const branding = ctx?.branding ?? null
-  const brandingLoading = ctx?.loading ?? false
   const refetch = ctx?.refetch ?? (async () => {})
   const { settings, setMode, setPrimaryColorKey, setDensity, primaryPresets } = useThemeSettings()
   const [primaryColor, setPrimaryColor] = useState('')
@@ -76,14 +75,6 @@ export function Appearance() {
     } finally {
       setSaving(false)
     }
-  }
-
-  if (brandingLoading && !branding) {
-    return (
-      <PageContainer>
-        <Typography color="text.secondary">Carregando...</Typography>
-      </PageContainer>
-    )
   }
 
   return (

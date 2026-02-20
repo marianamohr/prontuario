@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Box,
   Drawer,
@@ -58,6 +58,7 @@ export function AppShell() {
   const { user, logout, isImpersonated } = useAuth()
   const branding = useBranding()?.branding ?? null
   const navigate = useNavigate()
+  const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null)
@@ -70,6 +71,10 @@ export function AppShell() {
   useEffect(() => {
     if (!isMobile) setDrawerOpen(false)
   }, [isMobile])
+
+  useEffect(() => {
+    setUserMenuAnchor(null)
+  }, [location.pathname])
 
   const handleLogout = () => {
     setUserMenuAnchor(null)

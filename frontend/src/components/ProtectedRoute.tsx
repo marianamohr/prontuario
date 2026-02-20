@@ -5,7 +5,7 @@ export function ProtectedRoute({ children, roles }: { children: React.ReactNode;
   const { user, loading } = useAuth()
   const location = useLocation()
 
-  if (loading) {
+  if (loading && !user) {
     return <p style={{ padding: '2rem' }}>Carregando...</p>
   }
   if (!user) {

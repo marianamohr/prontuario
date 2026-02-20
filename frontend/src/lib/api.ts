@@ -242,11 +242,11 @@ export type ScheduleDay = {
 }
 
 export function getScheduleConfig() {
-  return api<{ days: ScheduleDay[] }>('/api/me/schedule-config')
+  return api<{ days: ScheduleDay[] }>('/api/me/schedule-config', { cache: 'no-store' })
 }
 
 export function putScheduleConfig(days: { day_of_week: number; enabled?: boolean; start_time?: string | null; end_time?: string | null; consultation_duration_minutes?: number; interval_minutes?: number; lunch_start?: string | null; lunch_end?: string | null }[]) {
-  return api<{ message: string }>('/api/me/schedule-config', { method: 'PUT', json: { days } })
+  return api<{ message: string; days?: ScheduleDay[]; listLen?: number }>('/api/me/schedule-config', { method: 'PUT', json: { days } })
 }
 
 export function copyScheduleConfigDay(from_day: number, to_day: number) {

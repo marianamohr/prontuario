@@ -36,7 +36,6 @@ export function PatientContracts() {
   const [selectedGuardianId, setSelectedGuardianId] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [contractDataInicio, setContractDataInicio] = useState('')
-  const [contractDataFim, setContractDataFim] = useState('')
   const [contractValor, setContractValor] = useState('')
   const [contractPeriodicidade, setContractPeriodicidade] = useState('')
   const [sendingContract, setSendingContract] = useState(false)
@@ -49,6 +48,7 @@ export function PatientContracts() {
   const [scheduleRules, setScheduleRules] = useState<api.ScheduleRule[]>([])
   const [contractNumAppointments, setContractNumAppointments] = useState<number | ''>('')
   const [availableSlots, setAvailableSlots] = useState<api.AvailableSlotItem[]>([])
+  const [slotsLoading, setSlotsLoading] = useState(false)
   const [endingContractId, setEndingContractId] = useState<string | null>(null)
   const [endContractDate, setEndContractDate] = useState('')
   const [showAllContracts, setShowAllContracts] = useState(false)
@@ -81,9 +81,11 @@ export function PatientContracts() {
     load()
   }, [load])
 
-  // Carregar slots disponíveis para pré-agendamento quando o modal de contrato estiver aberto
+  // Slots disponíveis para pré-agendamento: vêm da agenda do profissional/clínica logados (GET /api/me/available-slots).
+  // O backend usa o mesmo contexto (clinic_id e professional do JWT) e a config da agenda (clinic_schedule_config).
   useEffect(() => {
     if (!contractModalOpen || !canSendContract) return
+    setSlotsLoading(true)
     const fromDate = contractDataInicio ? new Date(contractDataInicio + 'T12:00:00') : new Date()
     const from = fromDate.toISOString().slice(0, 10)
     const toDate = new Date(fromDate)
@@ -92,19 +94,33 @@ export function PatientContracts() {
     api.listAvailableSlots(from, to)
       .then((r) => setAvailableSlots(r.slots || []))
       .catch(() => setAvailableSlots([]))
+      .finally(() => setSlotsLoading(false))
   }, [contractModalOpen, canSendContract, contractDataInicio])
 
-  // Por dia da semana (0=dom .. 6=sáb), horários disponíveis (únicos e ordenados)
+  // Por dia da semana (0=dom .. 6=sáb), horários disponíveis em TODAS as datas desse dia na janela (interseção), para não mostrar 08:50 se em alguma segunda já houver consulta 09:00.
   const availableTimesByDay = useMemo(() => {
-    const sets: Record<number, Set<string>> = {}
+    const byDayAndDate: Record<number, Record<string, Set<string>>> = {}
     for (const s of availableSlots) {
       const day = new Date(s.date + 'T12:00:00').getDay()
-      if (!sets[day]) sets[day] = new Set()
-      sets[day].add(s.start_time)
+      if (!byDayAndDate[day]) byDayAndDate[day] = {}
+      if (!byDayAndDate[day][s.date]) byDayAndDate[day][s.date] = new Set()
+      byDayAndDate[day][s.date].add(s.start_time)
     }
     const byDay: Record<number, string[]> = {}
-    for (const d of Object.keys(sets)) {
-      byDay[Number(d)] = Array.from(sets[Number(d)]).sort()
+    for (const dayStr of Object.keys(byDayAndDate)) {
+      const day = Number(dayStr)
+      const dateSets = byDayAndDate[day]
+      const dates = Object.keys(dateSets)
+      if (dates.length === 0) {
+        byDay[day] = []
+        continue
+      }
+      let intersection = new Set(dateSets[dates[0]])
+      for (let i = 1; i < dates.length; i++) {
+        const next = dateSets[dates[i]]
+        intersection = new Set([...intersection].filter((t) => next.has(t)))
+      }
+      byDay[day] = Array.from(intersection).sort()
     }
     return byDay
   }, [availableSlots])
@@ -115,7 +131,6 @@ export function PatientContracts() {
     setSelectedGuardianId(guardians[0]?.id ?? '')
     setSelectedTemplateId('')
     setContractDataInicio('')
-    setContractDataFim('')
     setContractValor('')
     setContractPeriodicidade('')
     setScheduleRules([])
@@ -155,7 +170,7 @@ export function PatientContracts() {
         selectedGuardianId,
         selectedTemplateId,
         contractDataInicio || undefined,
-        contractDataFim || undefined,
+        undefined,
         valorFormatado,
         contractPeriodicidade.trim() || undefined,
         scheduleRules.length > 0 ? scheduleRules : undefined,
@@ -220,8 +235,16 @@ export function PatientContracts() {
       const res = await api.cancelPatientContract(patientId, contractId)
       setContractMessage(res.message ?? 'Contrato cancelado. O responsável foi notificado por e-mail.')
       api.listPatientContracts(patientId).then((r) => setPatientContracts(r.contracts))
-    } catch {
-      setContractMessage('Falha ao cancelar contrato.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Falha ao cancelar contrato.'
+      try {
+        const parsed = JSON.parse(msg) as { error?: string }
+        setContractMessage(parsed.error === 'contract already signed; use end contract instead'
+          ? 'Contrato já assinado; use Encerrar contrato.'
+          : parsed.error ?? 'Falha ao cancelar contrato.')
+      } catch {
+        setContractMessage(msg || 'Falha ao cancelar contrato.')
+      }
     } finally {
       setCancellingId(null)
     }
@@ -259,7 +282,7 @@ export function PatientContracts() {
         selectedGuardianId,
         selectedTemplateId,
         contractDataInicio || undefined,
-        contractDataFim || undefined,
+        undefined,
         valorFormatado,
         contractPeriodicidade.trim() || undefined
       )
@@ -405,7 +428,7 @@ export function PatientContracts() {
                           Encerrar contrato
                         </Button>
                       )}
-                      {(c.status === 'PENDING' || c.status === 'SIGNED') && (
+                      {c.status === 'PENDING' && (
                         <Button size="small" variant="outlined" color="error" disabled={cancellingId === c.id} onClick={() => handleCancelContract(c.id)}>
                           {cancellingId === c.id ? 'Cancelando...' : 'Cancelar'}
                         </Button>
@@ -470,14 +493,17 @@ export function PatientContracts() {
               </Select>
             </FormControl>
             <TextField type="date" label="Data de início" size="small" fullWidth value={contractDataInicio} onChange={(e) => setContractDataInicio(e.target.value)} InputLabelProps={{ shrink: true }} />
-            <TextField type="date" label="Data de término" size="small" fullWidth value={contractDataFim} onChange={(e) => setContractDataFim(e.target.value)} InputLabelProps={{ shrink: true }} />
             <TextField label="Valor por sessão (R$) *" size="small" fullWidth value={contractValor} onChange={(e) => { setContractValor(e.target.value); setContractMessage('') }} placeholder="Ex.: 150 ou 150,50" />
             <Typography variant="caption" color="text.secondary">Exibido no contrato como &quot;valor de R$ XX,XX por sessão&quot;</Typography>
             <TextField label="Periodicidade (opcional)" size="small" fullWidth value={contractPeriodicidade} onChange={(e) => setContractPeriodicidade(e.target.value)} placeholder="Ex.: semanal, quinzenal, mensal" />
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <TextField type="number" label="Quantidade de agendamentos (opcional)" size="small" fullWidth value={contractNumAppointments === '' ? '' : contractNumAppointments} onChange={(e) => { const v = e.target.value; setContractNumAppointments(v === '' ? '' : Math.max(1, parseInt(v, 10) || 1)) }} placeholder="Ex.: 4" inputProps={{ min: 1 }} />
-            <Typography variant="caption" color="text.secondary">Pré-agendar consultas (opcional)</Typography>
+            <Typography variant="caption" color="text.secondary">Pré-agendar consultas (opcional). Os horários serão agendados até 2030; encerramento ou cancelamento do contrato afetam apenas da data escolhida (ou de hoje) para frente.</Typography>
+            {slotsLoading && <Typography variant="body2" color="text.secondary">Carregando horários…</Typography>}
+            {!slotsLoading && availableSlots.length === 0 && contractModalOpen && (
+              <Typography variant="body2" color="text.secondary">Configure a agenda em Configurações para escolher horários.</Typography>
+            )}
             {scheduleRules.map((r, i) => {
               const timesForDay = availableTimesByDay[r.day_of_week] || []
               const slotTimeValid = timesForDay.includes(r.slot_time)
@@ -511,7 +537,7 @@ export function PatientContracts() {
                 </Box>
               )
             })}
-            <Button size="small" variant="outlined" onClick={() => {
+            <Button size="small" variant="outlined" disabled={slotsLoading || availableSlots.length === 0} onClick={() => {
               const firstDay = Object.keys(availableTimesByDay).map(Number).sort((a, b) => a - b)[0] ?? 1
               const firstTime = availableTimesByDay[firstDay]?.[0] ?? '09:00'
               setScheduleRules((prev) => [...prev, { day_of_week: firstDay, slot_time: firstTime }])

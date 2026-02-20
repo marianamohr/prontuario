@@ -18,6 +18,9 @@ export function ScheduleConfig() {
   useEffect(() => {
     api.getScheduleConfig()
       .then((r) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f7feb6e7-b097-4667-b0f8-ccb09d80532e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ScheduleConfig.tsx:getScheduleConfig', message: 'GET schedule-config', data: { daysLen: (r.days || []).length }, timestamp: Date.now(), hypothesisId: 'SC2' }) }).catch(() => {})
+        // #endregion
         const list = r.days || []
         if (list.length === 7) {
           setDays(list.map((d) => ({ ...d, enabled: !!d.enabled })))
@@ -54,20 +57,40 @@ export function ScheduleConfig() {
   }, [])
 
   const handleSave = async () => {
+    if (days.length === 0) return
     setSaving(true)
     setMessage('')
-    const payload = days.map((d) => ({
-      day_of_week: d.day_of_week,
-      enabled: d.enabled,
-      start_time: d.start_time || null,
-      end_time: d.end_time || null,
-      consultation_duration_minutes: d.consultation_duration_minutes,
-      interval_minutes: d.interval_minutes,
-      lunch_start: d.lunch_start || null,
-      lunch_end: d.lunch_end || null,
-    }))
+    // Envia apenas os dias habilitados; o backend substitui toda a config e grava só esses.
+    const payload = days
+      .filter((d) => d.enabled)
+      .map((d) => ({
+        day_of_week: d.day_of_week,
+        enabled: true,
+        start_time: d.start_time || null,
+        end_time: d.end_time || null,
+        consultation_duration_minutes: d.consultation_duration_minutes,
+        interval_minutes: d.interval_minutes,
+        lunch_start: d.lunch_start || null,
+        lunch_end: d.lunch_end || null,
+      }))
+    if (payload.length === 0) {
+      setMessage('Marque pelo menos um dia para salvar.')
+      return
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/f7feb6e7-b097-4667-b0f8-ccb09d80532e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ScheduleConfig.tsx:handleSave-before', message: 'PUT schedule-config', data: { payloadLen: payload.length, firstDay: payload[0] }, timestamp: Date.now(), hypothesisId: 'SC1' }) }).catch(() => {})
+    // #endregion
     try {
-      await api.putScheduleConfig(payload)
+      const res = await api.putScheduleConfig(payload)
+      // #region agent log
+      const resDaysLen = res.days?.length ?? 0
+      fetch('http://127.0.0.1:7243/ingest/f7feb6e7-b097-4667-b0f8-ccb09d80532e', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ScheduleConfig.tsx:handleSave-after', message: 'PUT response', data: { resDaysLen, hasDays: !!res.days }, timestamp: Date.now(), hypothesisId: 'SC1' }) }).catch(() => {})
+      // #endregion
+      const list = res.days || (await api.getScheduleConfig()).days || []
+      console.log('list', list)
+      if (list.length === 7) {
+        setDays(list.map((d) => ({ ...d, enabled: !!d.enabled })))
+      }
       setMessage('Configuração salva.')
     } catch {
       setMessage('Falha ao salvar.')
@@ -110,19 +133,14 @@ export function ScheduleConfig() {
     )
   }
 
-  if (loading) return (
-    <PageContainer>
-      <Typography color="text.secondary">Carregando...</Typography>
-    </PageContainer>
-  )
-
   const enabledDays = days.filter((d) => d.enabled)
 
   return (
     <PageContainer>
       <Typography variant="h4" sx={{ mb: 2 }}>Configurar agenda</Typography>
+      {loading && <Typography color="text.secondary" sx={{ mb: 1 }}>Carregando...</Typography>}
       <Typography color="text.secondary" sx={{ mb: 2 }}>
-        Marque os dias da semana em que você atende. Só os dias marcados aparecem para configurar horários e na agenda.
+        Marque apenas os dias em que você atende (por exemplo, só Segunda e Terça). Não é preciso preencher todos os dias. Só os dias marcados aparecem para configurar horários e na agenda.
       </Typography>
 
       <Box sx={{ mb: 2 }}>
@@ -181,7 +199,7 @@ export function ScheduleConfig() {
               </Paper>
             ))}
           </Box>
-          <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ mt: 2 }}>
+          <Button variant="contained" onClick={handleSave} disabled={saving || loading || days.length === 0} sx={{ mt: 2 }}>
             {saving ? 'Salvando...' : 'Salvar configuração'}
           </Button>
         </>
