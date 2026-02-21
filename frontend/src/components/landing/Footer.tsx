@@ -3,6 +3,8 @@ export default function Footer() {
   const phone = rawPhone.replace(/\D/g, '')
   const message = String(import.meta.env.VITE_CONTACT_WHATSAPP_MESSAGE || 'Olá! Vim pelo CamiHealth e gostaria de falar com você.')
   const href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : 'https://wa.me/'
+  
+  console.log('rawPhone', rawPhone)
   console.log('phone', phone)
   console.log('message', message)
   console.log('href', href)
