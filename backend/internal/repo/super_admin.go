@@ -29,3 +29,18 @@ func SuperAdminByEmail(ctx context.Context, db *gorm.DB, email string) (*SuperAd
 	}
 	return &s, nil
 }
+
+func SuperAdminByID(ctx context.Context, db *gorm.DB, id uuid.UUID) (*SuperAdmin, error) {
+	var s SuperAdmin
+	err := db.WithContext(ctx).Raw(`
+		SELECT id, email, password_hash, full_name, status
+		FROM super_admins WHERE id = ? AND status != 'CANCELLED'
+	`, id).Scan(&s).Error
+	if err != nil {
+		return nil, err
+	}
+	if s.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &s, nil
+}

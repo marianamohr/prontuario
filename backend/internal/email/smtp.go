@@ -186,6 +186,25 @@ Este link expira em 7 dias. Se você não esperava este convite, ignore este e-m
 	return c.Send(to, "Convite para cadastro - Prontuário Saúde", b.String(), false)
 }
 
+func (c *Config) SendSuperAdminInvite(to, fullName, registerURL string) error {
+	tpl := `Olá, {{.FullName}},
+
+Você foi convidado a se cadastrar como super admin no Prontuário Saúde. Para definir sua senha e concluir seu cadastro, acesse o link abaixo:
+
+{{.RegisterURL}}
+
+Este link expira em 7 dias. Se você não esperava este convite, ignore este e-mail.`
+	t, err := template.New("").Parse(tpl)
+	if err != nil {
+		return err
+	}
+	var b bytes.Buffer
+	if err := t.Execute(&b, map[string]string{"FullName": fullName, "RegisterURL": registerURL}); err != nil {
+		return err
+	}
+	return c.Send(to, "Convite para cadastro (Super Admin) - Prontuário Saúde", b.String(), false)
+}
+
 // SendPatientInvite envia um e-mail ao responsável legal para completar cadastro do paciente via link.
 func (c *Config) SendPatientInvite(to, fullName, registerURL string) error {
 	tpl := `Olá, {{.FullName}},

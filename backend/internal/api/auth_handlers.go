@@ -9,10 +9,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prontuario/backend/internal/auth"
-	"gorm.io/gorm"
 	"github.com/prontuario/backend/internal/cache"
 	"github.com/prontuario/backend/internal/config"
 	"github.com/prontuario/backend/internal/repo"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
@@ -42,6 +42,7 @@ type Handler struct {
 	sendPasswordResetEmail     func(to, token string) error
 	sendContractSignedEmail    func(to, name string, pdf []byte, verificationToken string) error
 	sendInviteEmail            func(to, fullName, registerURL string) error
+	sendSuperAdminInviteEmail  func(to, fullName, registerURL string) error
 	sendPatientInviteEmail     func(to, fullName, registerURL string) error
 	sendContractToSignEmail    func(to, fullName, signURL string) error
 	sendContractCancelledEmail func(to, fullName string) error
@@ -57,6 +58,9 @@ func (h *Handler) SetSendContractSignedEmail(fn func(to, name string, pdf []byte
 }
 func (h *Handler) SetSendInviteEmail(fn func(to, fullName, registerURL string) error) {
 	h.sendInviteEmail = fn
+}
+func (h *Handler) SetSendSuperAdminInviteEmail(fn func(to, fullName, registerURL string) error) {
+	h.sendSuperAdminInviteEmail = fn
 }
 func (h *Handler) SetSendPatientInviteEmail(fn func(to, fullName, registerURL string) error) {
 	h.sendPatientInviteEmail = fn
@@ -436,7 +440,8 @@ func (h *Handler) PutMyBranding(w http.ResponseWriter, r *http.Request) {
 
 // GetMyProfile retorna dados editáveis do perfil do profissional (não inclui CPF).
 func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
-	if auth.RoleFrom(r.Context()) != auth.RoleProfessional {
+	role := auth.RoleFrom(r.Context())
+	if role != auth.RoleProfessional && role != auth.RoleSuperAdmin {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -445,47 +450,70 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
+	cacheKey := "profile:" + role + ":" + userID
 	if h.Cache != nil {
-		if cached := h.Cache.Get("profile:" + userID); cached != nil {
+		if cached := h.Cache.Get(cacheKey); cached != nil {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(cached)
 			return
 		}
 	}
-	profID, err := uuid.Parse(userID)
+	uid, err := uuid.Parse(userID)
 	if err != nil {
 		http.Error(w, `{"error":"invalid user"}`, http.StatusBadRequest)
 		return
 	}
-	p, err := repo.ProfessionalProfileByID(r.Context(), h.DB, profID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	w.Header().Set("Content-Type", "application/json")
+	payload := map[string]interface{}{}
+	switch role {
+	case auth.RoleProfessional:
+		p, err := repo.ProfessionalProfileByID(r.Context(), h.DB, uid)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+				return
+			}
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 			return
 		}
-		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-		return
-	}
-	var addressObj map[string]interface{}
-	if p.AddressID != nil {
-		addr, err := repo.GetAddressByID(r.Context(), h.DB, *p.AddressID)
-		if err == nil {
-			addressObj = addressToMap(addr)
+		var addressObj map[string]interface{}
+		if p.AddressID != nil {
+			addr, err := repo.GetAddressByID(r.Context(), h.DB, *p.AddressID)
+			if err == nil {
+				addressObj = addressToMap(addr)
+			}
 		}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	payload := map[string]interface{}{
-		"id":             p.ID.String(),
-		"email":          p.Email,
-		"full_name":      p.FullName,
-		"trade_name":     p.TradeName,
-		"birth_date":     p.BirthDate,
-		"address":        addressObj,
-		"marital_status": p.MaritalStatus,
+		payload = map[string]interface{}{
+			"id":             p.ID.String(),
+			"email":          p.Email,
+			"full_name":      p.FullName,
+			"trade_name":     p.TradeName,
+			"birth_date":     p.BirthDate,
+			"address":        addressObj,
+			"marital_status": p.MaritalStatus,
+		}
+	case auth.RoleSuperAdmin:
+		s, err := repo.SuperAdminByID(r.Context(), h.DB, uid)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+				return
+			}
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		payload = map[string]interface{}{
+			"id":        s.ID.String(),
+			"email":     s.Email,
+			"full_name": s.FullName,
+		}
+	default:
+		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+		return
 	}
 	buf, _ := json.Marshal(payload)
 	if h.Cache != nil {
-		h.Cache.Set("profile:"+userID, buf)
+		h.Cache.Set(cacheKey, buf)
 	}
 	_, _ = w.Write(buf)
 }
@@ -493,7 +521,8 @@ func (h *Handler) GetMyProfile(w http.ResponseWriter, r *http.Request) {
 // PatchMyProfile atualiza perfil do profissional (trade_name + dados pessoais), sem permitir alterar email/CPF.
 // Também sincroniza clinics.name (clinic interna) com trade_name (se informado) ou full_name.
 func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
-	if auth.RoleFrom(r.Context()) != auth.RoleProfessional {
+	role := auth.RoleFrom(r.Context())
+	if role != auth.RoleProfessional && role != auth.RoleSuperAdmin {
 		http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
 		return
 	}
@@ -502,9 +531,39 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	profID, err := uuid.Parse(userID)
+	uid, err := uuid.Parse(userID)
 	if err != nil {
 		http.Error(w, `{"error":"invalid user"}`, http.StatusBadRequest)
+		return
+	}
+
+	// SUPER_ADMIN: permite apenas alterar full_name.
+	if role == auth.RoleSuperAdmin {
+		var req struct {
+			FullName string `json:"full_name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+			return
+		}
+		fullName := strings.TrimSpace(req.FullName)
+		if fullName == "" {
+			http.Error(w, `{"error":"full_name required"}`, http.StatusBadRequest)
+			return
+		}
+		if err := h.DB.WithContext(r.Context()).Exec(
+			"UPDATE super_admins SET full_name = ?, updated_at = now() WHERE id = ?",
+			fullName,
+			uid,
+		).Error; err != nil {
+			http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+			return
+		}
+		if h.Cache != nil {
+			h.Cache.Delete("profile:" + role + ":" + userID)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Perfil atualizado."})
 		return
 	}
 	var req struct {
@@ -547,7 +606,7 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		addressID = &id
 	}
-	if err := repo.UpdateProfessionalProfile(r.Context(), h.DB, profID, fullName, tradeName, req.BirthDate, addressID, req.MaritalStatus); err != nil {
+	if err := repo.UpdateProfessionalProfile(r.Context(), h.DB, uid, fullName, tradeName, req.BirthDate, addressID, req.MaritalStatus); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 			return
@@ -556,11 +615,11 @@ func (h *Handler) PatchMyProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.Cache != nil {
-		h.Cache.Delete("profile:" + userID)
+		h.Cache.Delete("profile:" + role + ":" + userID)
 	}
 
 	// Sincroniza o nome da clinic interna.
-	p, err := repo.ProfessionalProfileByID(r.Context(), h.DB, profID)
+	p, err := repo.ProfessionalProfileByID(r.Context(), h.DB, uid)
 	if err == nil {
 		effectiveName := fullName
 		if p.TradeName != nil && strings.TrimSpace(*p.TradeName) != "" {

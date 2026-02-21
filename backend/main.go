@@ -111,6 +111,9 @@ func main() {
 		h.SetSendInviteEmail(func(to, fullName, registerURL string) error {
 			return mailCfg.SendInvite(to, fullName, registerURL)
 		})
+		h.SetSendSuperAdminInviteEmail(func(to, fullName, registerURL string) error {
+			return mailCfg.SendSuperAdminInvite(to, fullName, registerURL)
+		})
 		h.SetSendPatientInviteEmail(func(to, fullName, registerURL string) error {
 			return mailCfg.SendPatientInvite(to, fullName, registerURL)
 		})
@@ -145,6 +148,8 @@ func main() {
 	r.HandleFunc("/api/appointments/remarcar/{token}", h.RemarcarAppointment).Methods(http.MethodPatch)
 	apiRouter.HandleFunc("/invites/by-token", h.GetInviteByToken).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/invites/accept", h.AcceptInvite).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/super-admin-invites/by-token", h.GetSuperAdminInviteByToken).Methods(http.MethodGet)
+	apiRouter.HandleFunc("/super-admin-invites/accept", h.AcceptSuperAdminInvite).Methods(http.MethodPost)
 	apiRouter.HandleFunc("/patient-invites/by-token", h.GetPatientInviteByToken).Methods(http.MethodGet)
 	apiRouter.HandleFunc("/patient-invites/accept", h.AcceptPatientInvite).Methods(http.MethodPost)
 	// Ingestão de erros do frontend (sem PII). Auth é opcional: se houver JWT, enriquece o contexto.
@@ -157,8 +162,9 @@ func main() {
 	protected.Handle("/me/signature", middleware.RequireRole(auth.RoleProfessional)(http.HandlerFunc(h.PutMySignature))).Methods(http.MethodPut)
 	protected.Handle("/me/branding", middleware.RequireRole(auth.RoleProfessional)(http.HandlerFunc(h.GetMyBranding))).Methods(http.MethodGet)
 	protected.Handle("/me/branding", middleware.RequireRole(auth.RoleProfessional)(http.HandlerFunc(h.PutMyBranding))).Methods(http.MethodPut)
-	protected.Handle("/me/profile", middleware.RequireRole(auth.RoleProfessional)(http.HandlerFunc(h.GetMyProfile))).Methods(http.MethodGet)
-	protected.Handle("/me/profile", middleware.RequireRole(auth.RoleProfessional)(http.HandlerFunc(h.PatchMyProfile))).Methods(http.MethodPatch)
+	protected.Handle("/me/profile", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.GetMyProfile))).Methods(http.MethodGet)
+	protected.Handle("/me/profile", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.PatchMyProfile))).Methods(http.MethodPatch)
+	protected.Handle("/me/password", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.ChangeMyPassword))).Methods(http.MethodPost)
 	protected.Handle("/patients", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.ListPatients))).Methods(http.MethodGet)
 	protected.Handle("/patients/{patientId}", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.GetPatient))).Methods(http.MethodGet)
 	protected.Handle("/patients/{patientId}", middleware.RequireRole(auth.RoleProfessional, auth.RoleSuperAdmin)(http.HandlerFunc(h.UpdatePatient))).Methods(http.MethodPatch)
@@ -207,6 +213,10 @@ func main() {
 	protected.Handle("/backoffice/invites", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.CreateInvite))).Methods(http.MethodPost)
 	protected.Handle("/backoffice/invites/{id}", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.DeleteInvite))).Methods(http.MethodDelete)
 	protected.Handle("/backoffice/invites/{id}/resend", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ResendInvite))).Methods(http.MethodPost)
+	protected.Handle("/backoffice/super-admin-invites", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ListSuperAdminInvites))).Methods(http.MethodGet)
+	protected.Handle("/backoffice/super-admin-invites", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.CreateSuperAdminInvite))).Methods(http.MethodPost)
+	protected.Handle("/backoffice/super-admin-invites/{id}", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.DeleteSuperAdminInvite))).Methods(http.MethodDelete)
+	protected.Handle("/backoffice/super-admin-invites/{id}/resend", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ResendSuperAdminInvite))).Methods(http.MethodPost)
 	protected.Handle("/backoffice/reminder/trigger", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.TriggerReminder))).Methods(http.MethodPost)
 	protected.Handle("/backoffice/impersonate/start", middleware.RequireRole(auth.RoleSuperAdmin)(http.HandlerFunc(h.ImpersonateStart))).Methods(http.MethodPost)
 	protected.HandleFunc("/backoffice/impersonate/end", h.ImpersonateEnd).Methods(http.MethodPost)
