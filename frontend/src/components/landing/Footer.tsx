@@ -3,7 +3,7 @@ export default function Footer() {
   const phone = rawPhone.replace(/\D/g, '')
   const message = String(import.meta.env.VITE_CONTACT_WHATSAPP_MESSAGE || 'Olá! Vim pelo CamiHealth e gostaria de falar com você.')
   const href = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : 'https://wa.me/'
-
+  console.log('href', href)
   return (
     <footer className="border-t border-border bg-background py-8">
       <div className="container flex flex-col items-center justify-between gap-4 sm:flex-row">
