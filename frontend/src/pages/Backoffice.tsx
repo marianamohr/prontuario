@@ -321,6 +321,7 @@ export function Backoffice() {
         <>
           <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button variant="contained" onClick={() => navigate('/backoffice/invites')}>Enviar convite para profissional</Button>
+            <Button variant="outlined" onClick={() => navigate('/backoffice/super-admin-invites')}>Enviar convite para super admin</Button>
           </Box>
           <Box sx={{ mb: 2 }}>
             <Button variant="outlined" size="small" onClick={load}>Atualizar</Button>

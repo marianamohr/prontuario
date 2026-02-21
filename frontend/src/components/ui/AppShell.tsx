@@ -40,8 +40,6 @@ const navItems: { to: string; end?: boolean; label: string; icon: React.ReactNod
   { to: '/home', end: true, label: 'Página inicial', icon: <HomeIcon /> },
   { to: '/patients', label: 'Pacientes', icon: <PeopleIcon />, roles: ['PROFESSIONAL', 'LEGAL_GUARDIAN'] },
   { to: '/agenda', label: 'Agenda', icon: <CalendarMonthIcon />, roles: ['PROFESSIONAL', 'SUPER_ADMIN'] },
-  { to: '/appearance', label: 'Aparência', icon: <PaletteIcon />, roles: ['PROFESSIONAL'] },
-  { to: '/profile', label: 'Editar perfil', icon: <PersonIcon />, roles: ['PROFESSIONAL'] },
   // `end: true` evita que /backoffice fique ativo em /backoffice/*
   { to: '/backoffice', end: true, label: 'Usuários', icon: <SettingsIcon />, roles: ['SUPER_ADMIN'] },
   { to: '/backoffice/audit', end: true, label: 'Auditoria', icon: <TimelineIcon />, roles: ['SUPER_ADMIN'] },
@@ -65,7 +63,7 @@ export function AppShell() {
 
   const isProfessional = user?.role === 'PROFESSIONAL'
   const drawerBg = isProfessional && branding?.primary_color ? branding.primary_color : theme.palette.primary.main
-  const homeLabel = isProfessional && branding?.home_label ? branding.home_label : 'Camihealth'
+  const homeLabel = isProfessional && branding?.home_label ? branding.home_label : 'CamiHealth'
   const homeImageUrl = isProfessional ? branding?.home_image_url : null
 
   useEffect(() => {
@@ -191,7 +189,7 @@ export function AppShell() {
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                 slotProps={{ paper: { sx: { minWidth: 220 } } }}
               >
-                {(user.role === 'PROFESSIONAL' || user.role === 'SUPER_ADMIN') && (
+                {user.role === 'PROFESSIONAL' && (
                   <>
                     <MenuItem component={Link} to="/contract-templates" onClick={() => setUserMenuAnchor(null)}>
                       <ListItemIcon><DescriptionIcon fontSize="small" /></ListItemIcon>
@@ -202,6 +200,12 @@ export function AppShell() {
                       Configurar agenda
                     </MenuItem>
                   </>
+                )}
+                {(user.role === 'PROFESSIONAL' || user.role === 'SUPER_ADMIN') && (
+                  <MenuItem component={Link} to="/profile" onClick={() => setUserMenuAnchor(null)}>
+                    <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
+                    Editar perfil
+                  </MenuItem>
                 )}
                 {user.role === 'PROFESSIONAL' && (
                   <MenuItem component={Link} to="/appearance" onClick={() => setUserMenuAnchor(null)}>

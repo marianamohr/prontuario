@@ -4,7 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Landing (Camihealth) CSS variables – used by Tailwind in landing components */
+/* Landing (CamiHealth) CSS variables – used by Tailwind in landing components */
 :root {
   --background: 150 20% 99%;
   --foreground: 200 25% 15%;

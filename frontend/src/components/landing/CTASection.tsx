@@ -13,7 +13,7 @@ export default function CTASection() {
         </p>
         <Link to="/login">
           <Button size="lg" className="text-base px-10 py-6 font-semibold shadow-lg">
-            Acessar o Camihealth
+            Acessar o CamiHealth
           </Button>
         </Link>
       </div>

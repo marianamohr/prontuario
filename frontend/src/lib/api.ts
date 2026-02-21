@@ -230,6 +230,13 @@ export function patchMyProfile(payload: {
   return api<{ message: string }>('/api/me/profile', { method: 'PATCH', json: payload })
 }
 
+export function changeMyPassword(current_password: string, new_password: string) {
+  return api<{ message: string }>('/api/me/password', {
+    method: 'POST',
+    json: { current_password, new_password },
+  })
+}
+
 export type ScheduleDay = {
   day_of_week: number
   enabled: boolean
@@ -647,6 +654,33 @@ export function resendInvite(id: string) {
   })
 }
 
+export function listSuperAdminInvites(opts?: { limit?: number; offset?: number }) {
+  const params = new URLSearchParams()
+  if (opts?.limit != null) params.set('limit', String(opts.limit))
+  if (opts?.offset != null) params.set('offset', String(opts.offset))
+  const q = params.toString() ? `?${params.toString()}` : ''
+  return api<ListInvitesRes>(`/api/backoffice/super-admin-invites${q}`)
+}
+
+export function createSuperAdminInvite(email: string, full_name: string) {
+  return api<{ message: string }>('/api/backoffice/super-admin-invites', {
+    method: 'POST',
+    json: { email, full_name },
+  })
+}
+
+export function deleteSuperAdminInvite(id: string) {
+  return api<{ message: string }>(`/api/backoffice/super-admin-invites/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function resendSuperAdminInvite(id: string) {
+  return api<{ message: string }>(`/api/backoffice/super-admin-invites/${encodeURIComponent(id)}/resend`, {
+    method: 'POST',
+  })
+}
+
 export function getRemarcarByToken(token: string) {
   return api<{
     appointment_id: string
@@ -778,6 +812,23 @@ export function acceptInvite(data: {
   marital_status?: string
 }) {
   return api<{ message: string }>('/api/invites/accept', {
+    method: 'POST',
+    json: data,
+  })
+}
+
+export function getSuperAdminInviteByToken(token: string) {
+  return api<{ email: string; full_name: string; expires_at: string }>(
+    `/api/super-admin-invites/by-token?token=${encodeURIComponent(token)}`
+  )
+}
+
+export function acceptSuperAdminInvite(data: {
+  token: string
+  password: string
+  full_name?: string
+}) {
+  return api<{ message: string }>('/api/super-admin-invites/accept', {
     method: 'POST',
     json: data,
   })

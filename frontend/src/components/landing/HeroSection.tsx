@@ -8,7 +8,7 @@ export default function HeroSection() {
     <section className="relative overflow-hidden bg-background">
       <nav className="container flex items-center justify-between py-5">
         <span className="text-2xl font-bold text-primary tracking-tight">
-          Camihealth
+          CamiHealth
         </span>
         <Link to="/login">
           <Button size="sm">Entrar</Button>
@@ -43,7 +43,7 @@ export default function HeroSection() {
           <div className="overflow-hidden rounded-2xl shadow-2xl border border-border">
             <img
               src={heroImage}
-              alt="Interface do Camihealth — sistema para profissionais de saúde"
+              alt="Interface do CamiHealth — sistema para profissionais de saúde"
               className="w-full h-auto object-cover"
               loading="eager"
             />

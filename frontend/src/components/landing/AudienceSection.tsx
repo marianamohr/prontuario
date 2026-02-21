@@ -13,7 +13,7 @@ export default function AudienceSection() {
     <section className="py-20 bg-background">
       <div className="container text-center">
         <h2 className="text-3xl font-bold text-foreground mb-4">
-          Para quem é o Camihealth?
+          Para quem é o CamiHealth?
         </h2>
         <p className="text-muted-foreground mb-10 max-w-xl mx-auto">
           Para profissionais liberais da saúde que atendem sozinhos ou em

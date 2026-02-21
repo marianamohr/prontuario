@@ -59,7 +59,7 @@ export function Login() {
       >
         <Box sx={{ width: '100%', maxWidth: 560, my: 'auto', mx: 'auto' }}>
           <Typography variant="h6" fontWeight={700} color="primary" sx={{ mb: 6, fontSize: 20, lineHeight: 1.2 }}>
-            Camihealth
+            CamiHealth
           </Typography>
           <Typography
             variant="h3"
@@ -86,13 +86,13 @@ export function Login() {
           >
             <img
               src="/hero-image.jpg"
-              alt="Interface do Camihealth"
+              alt="Interface do CamiHealth"
               style={{ width: '100%', height: 'auto', display: 'block' }}
             />
           </Box>
         </Box>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pb: 2 }}>
-          © {new Date().getFullYear()} Camihealth. Todos os direitos reservados.
+          © {new Date().getFullYear()} CamiHealth. Todos os direitos reservados.
         </Typography>
       </Box>
 

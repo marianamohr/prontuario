@@ -14,6 +14,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword').then((m) => ({ 
 const Patients = lazy(() => import('./pages/Patients').then((m) => ({ default: m.Patients })))
 const Backoffice = lazy(() => import('./pages/Backoffice').then((m) => ({ default: m.Backoffice })))
 const BackofficeInvite = lazy(() => import('./pages/BackofficeInvite').then((m) => ({ default: m.BackofficeInvite })))
+const BackofficeSuperAdminInvites = lazy(() => import('./pages/BackofficeSuperAdminInvites').then((m) => ({ default: m.BackofficeSuperAdminInvites })))
 const BackofficeAudit = lazy(() => import('./pages/BackofficeAudit').then((m) => ({ default: m.BackofficeAudit })))
 const BackofficeErrors = lazy(() => import('./pages/BackofficeErrors').then((m) => ({ default: m.BackofficeErrors })))
 const SignContract = lazy(() => import('./pages/SignContract').then((m) => ({ default: m.SignContract })))
@@ -21,6 +22,7 @@ const VerifyContract = lazy(() => import('./pages/VerifyContract').then((m) => (
 const RecordEntries = lazy(() => import('./pages/RecordEntries').then((m) => ({ default: m.RecordEntries })))
 const PatientContracts = lazy(() => import('./pages/PatientContracts').then((m) => ({ default: m.PatientContracts })))
 const RegisterProfessional = lazy(() => import('./pages/RegisterProfessional').then((m) => ({ default: m.RegisterProfessional })))
+const RegisterSuperAdmin = lazy(() => import('./pages/RegisterSuperAdmin').then((m) => ({ default: m.RegisterSuperAdmin })))
 const RegisterPatient = lazy(() => import('./pages/RegisterPatient').then((m) => ({ default: m.RegisterPatient })))
 const Remarcar = lazy(() => import('./pages/Remarcar').then((m) => ({ default: m.Remarcar })))
 const ContractTemplates = lazy(() => import('./pages/ContractTemplates').then((m) => ({ default: m.ContractTemplates })))
@@ -56,6 +58,7 @@ export default function App() {
             <Route path="forgot-password" element={<ForgotPassword />} />
             <Route path="reset-password" element={<ResetPassword />} />
             <Route path="register" element={<RegisterProfessional />} />
+            <Route path="register-super-admin" element={<RegisterSuperAdmin />} />
             <Route path="register-patient" element={<RegisterPatient />} />
             <Route path="remarcar" element={<Remarcar />} />
             <Route
@@ -105,7 +108,7 @@ export default function App() {
             <Route
               path="profile"
               element={
-                <ProtectedRoute roles={['PROFESSIONAL']}>
+                <ProtectedRoute roles={['PROFESSIONAL', 'SUPER_ADMIN']}>
                   <Profile />
                 </ProtectedRoute>
               }
@@ -155,6 +158,14 @@ export default function App() {
               element={
                 <ProtectedRoute roles={['SUPER_ADMIN']}>
                   <BackofficeInvite />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="backoffice/super-admin-invites"
+              element={
+                <ProtectedRoute roles={['SUPER_ADMIN']}>
+                  <BackofficeSuperAdminInvites />
                 </ProtectedRoute>
               }
             />

@@ -15,7 +15,7 @@ export default function ProblemsSection() {
           Chega de improvisar no consultório
         </h2>
         <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
-          Sabemos que a rotina é corrida. O Camihealth resolve os problemas mais
+          Sabemos que a rotina é corrida. O CamiHealth resolve os problemas mais
           comuns de quem atende sozinho.
         </p>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
